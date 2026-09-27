@@ -1,0 +1,17 @@
+node_modules/
+.env
+.env.*
+!.env.example
+
+credentials/
+tokens/
+
+recordings/
+data/
+logs/
+scratch/
+
+*.log
+*.mp4
+*.ts
+*.m3u8

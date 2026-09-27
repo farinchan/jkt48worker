@@ -1,0 +1,31 @@
+{
+  "name": "jkt48-stream-recorder",
+  "version": "1.0.0",
+  "description": "Production-ready unattended 24/7 JKT48 stream auto-recorder with highest-resolution variant selection and Google Drive upload",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node --test tests/**/*.test.js",
+    "test:stream": "node src/cli/test-stream.js",
+    "test:drive": "node src/cli/test-drive.js",
+    "status": "node src/cli/status.js"
+  },
+  "keywords": [
+    "jkt48",
+    "stream-recorder",
+    "hls",
+    "ffmpeg",
+    "google-drive"
+  ],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "dotenv": "^18.0.4",
+    "googleapis": "^182.0.0",
+    "pino": "^10.3.1",
+    "pino-pretty": "^13.1.3"
+  }
+}
