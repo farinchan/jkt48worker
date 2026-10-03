@@ -97,14 +97,15 @@ class AppDatabase {
     bandwidth = null,
     frame_rate = null,
     source_url = null,
-    status = 'RECORDING'
+    status = 'RECORDING',
+    youtube_status = 'SKIPPED'
   }) {
     const now = new Date().toISOString();
     const stmt = this.db.prepare(`
       INSERT INTO recordings (
         filename, path, started_at, width, height, bandwidth, frame_rate,
-        source_url, status, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        source_url, status, youtube_status, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const result = stmt.run(
@@ -117,6 +118,7 @@ class AppDatabase {
       frame_rate,
       source_url,
       status,
+      youtube_status,
       now,
       now
     );
@@ -151,6 +153,7 @@ class AppDatabase {
       .prepare(
         `SELECT * FROM recordings 
          WHERE status IN ('PENDING_UPLOAD', 'UPLOAD_FAILED') 
+            OR youtube_status IN ('PENDING_UPLOAD', 'UPLOAD_FAILED')
          ORDER BY id ASC`
       )
       .all();
@@ -164,14 +167,20 @@ class AppDatabase {
 
   getStaleUploadingRecordings() {
     return this.db
-      .prepare(`SELECT * FROM recordings WHERE status = 'UPLOADING' ORDER BY id ASC`)
+      .prepare(
+        `SELECT * FROM recordings 
+         WHERE status = 'UPLOADING' OR youtube_status = 'UPLOADING' 
+         ORDER BY id ASC`
+      )
       .all();
   }
 
   countPendingUploads() {
     const row = this.db
       .prepare(
-        `SELECT COUNT(*) as count FROM recordings WHERE status IN ('PENDING_UPLOAD', 'UPLOADING', 'UPLOAD_FAILED')`
+        `SELECT COUNT(*) as count FROM recordings 
+         WHERE status IN ('PENDING_UPLOAD', 'UPLOADING', 'UPLOAD_FAILED')
+            OR youtube_status IN ('PENDING_UPLOAD', 'UPLOADING', 'UPLOAD_FAILED')`
       )
       .get();
     return row ? row.count : 0;
@@ -193,14 +202,21 @@ class AppDatabase {
     const uploading = this.getStaleUploadingRecordings();
     for (const rec of uploading) {
       if (fs.existsSync(rec.path)) {
-        this.updateRecording(rec.id, {
-          status: 'PENDING_UPLOAD',
-          last_upload_error: 'Interrupted by application restart'
-        });
+        const updates = {};
+        if (rec.status === 'UPLOADING') {
+          updates.status = 'PENDING_UPLOAD';
+          updates.last_upload_error = 'Interrupted by application restart';
+        }
+        if (rec.youtube_status === 'UPLOADING') {
+          updates.youtube_status = 'PENDING_UPLOAD';
+          updates.youtube_last_error = 'Interrupted by application restart';
+        }
+        this.updateRecording(rec.id, updates);
         recovered.push({ id: rec.id, filename: rec.filename, action: 'requeued' });
       } else {
         this.updateRecording(rec.id, {
           status: 'INVALID',
+          youtube_status: 'INVALID',
           last_upload_error: 'File missing after restart'
         });
         recovered.push({ id: rec.id, filename: rec.filename, action: 'invalid_missing' });

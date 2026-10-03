@@ -20,6 +20,7 @@ async function showStatus() {
     console.log(`Recordings Dir:     ${config.RECORDINGS_DIR}`);
     console.log(`Disk Free:          ${disk.freeGb !== null ? `${disk.freeGb} GB / ${disk.totalGb} GB` : 'Unknown'}`);
     console.log(`Pending Uploads:    ${pendingCount}`);
+    console.log(`YouTube Upload:     ${config.YOUTUBE_UPLOAD_ENABLED ? `ENABLED (${config.YOUTUBE_PRIVACY_STATUS})` : 'DISABLED'}`);
 
     if (active.length > 0) {
       const rec = active[0];
@@ -40,7 +41,8 @@ async function showStatus() {
       for (const r of recent) {
         const dur = r.duration_seconds ? `${r.duration_seconds}s` : '-';
         const sz = r.file_size ? `${(r.file_size / (1024 * 1024)).toFixed(1)} MB` : '-';
-        console.log(`  [#${r.id}] ${r.filename} | ${r.status} | ${dur} | ${sz} | ${r.started_at}`);
+        const ytInfo = r.youtube_video_id ? `YT: https://youtu.be/${r.youtube_video_id}` : `YT: ${r.youtube_status || 'SKIPPED'}`;
+        console.log(`  [#${r.id}] ${r.filename} | Drive: ${r.status} | ${ytInfo} | ${dur} | ${sz}`);
       }
     }
     console.log('==================================================');

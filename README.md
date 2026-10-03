@@ -1,6 +1,6 @@
 # JKT48 Stream Auto Recorder
 
-Production-ready, unattended 24/7 Node.js application that monitors the live JKT48 playback endpoint, automatically parses the HLS master playlist, selects the highest resolution video variant (e.g., 1080p60), records with FFmpeg without transcoding (`-c copy`), and uploads finalized recordings to Google Drive using a resumable streaming upload queue with crash recovery and local disk protection.
+Production-ready, unattended 24/7 Node.js application that monitors the live JKT48 playback endpoint, automatically parses the HLS master playlist, selects the highest resolution video variant (e.g., 1080p60), records with FFmpeg without transcoding (`-c copy`), and automatically uploads finalized recordings to **Google Drive** and **YouTube** using a resumable streaming upload queue with crash recovery and local disk protection.
 
 ---
 
@@ -12,23 +12,25 @@ Production-ready, unattended 24/7 Node.js application that monitors the live JKT
 4. [System Requirements](#4-system-requirements)
 5. [Node.js Installation](#5-nodejs-installation)
 6. [FFmpeg Installation](#6-ffmpeg-installation)
-7. [Google Cloud Console Setup](#7-google-cloud-console-setup)
+7. [Google Cloud Console Setup (Drive + YouTube)](#7-google-cloud-console-setup-drive--youtube)
 8. [Google Drive OAuth Setup](#8-google-drive-oauth-setup)
-9. [Environment Variables](#9-environment-variables)
-10. [First Run & Quick Start](#10-first-run--quick-start)
-11. [Stream Testing](#11-stream-testing)
-12. [Google Drive Testing](#12-google-drive-testing)
-13. [Recording Behavior & Atomic Files](#13-recording-behavior--atomic-files)
-14. [Highest-Resolution Variant Selection](#14-highest-resolution-variant-selection)
-15. [Persistent Upload Queue](#15-persistent-upload-queue)
-16. [Retry & Backoff Behavior](#16-retry--backoff-behavior)
-17. [Crash Recovery](#17-crash-recovery)
-18. [Disk Space Protection](#18-disk-space-protection)
-19. [Linux & systemd Deployment](#19-linux--systemd-deployment)
-20. [Windows Deployment & Service](#20-windows-deployment--service)
-21. [Troubleshooting & FAQs](#21-troubleshooting--faqs)
-22. [Security Best Practices](#22-security-best-practices)
-23. [Usage & Legal Note](#23-usage--legal-note)
+9. [YouTube OAuth & Channel Setup](#9-youtube-oauth--channel-setup)
+10. [Environment Variables](#10-environment-variables)
+11. [First Run & Quick Start](#11-first-run--quick-start)
+12. [Stream Testing](#12-stream-testing)
+13. [Google Drive Testing](#13-google-drive-testing)
+14. [YouTube Testing](#14-youtube-testing)
+15. [Recording Behavior & Atomic Files](#15-recording-behavior--atomic-files)
+16. [Highest-Resolution Variant Selection](#16-highest-resolution-variant-selection)
+17. [Persistent Upload Queue (Dual Platform)](#17-persistent-upload-queue-dual-platform)
+18. [Retry & Backoff Behavior](#18-retry--backoff-behavior)
+19. [Crash Recovery](#19-crash-recovery)
+20. [Disk Space Protection](#20-disk-space-protection)
+21. [Linux & systemd Deployment](#21-linux--systemd-deployment)
+22. [Windows Deployment & Service](#22-windows-deployment--service)
+23. [Troubleshooting & FAQs](#23-troubleshooting--faqs)
+24. [Security Best Practices](#24-security-best-practices)
+25. [Usage & Legal Note](#25-usage--legal-note)
 
 ---
 
@@ -43,7 +45,7 @@ This recorder solves this by:
 - Parsing all stream variants and attribute parameters.
 - Choosing the highest resolution available (prioritizing 1080p over 720p/480p/etc.).
 - Invoking FFmpeg with streaming reconnect and wildcard segment extension flags.
-- Safely managing recorded files, atomic renames, SQLite persistence, and verified Google Drive uploads.
+- Safely managing recorded files, atomic renames, SQLite persistence, and verified uploads to both Google Drive and YouTube.
 
 ---
 
@@ -56,7 +58,9 @@ This recorder solves this by:
 - **Zero-Transcoding Stream Copy:** Uses `-c copy` to record native video/audio streams with minimal CPU overhead.
 - **Atomic File Workflow:** Records to `.partial.mp4` and renames to final `.mp4` only upon successful finalization.
 - **SQLite Database with Crash Recovery:** Keeps track of all recordings, tracks upload attempts, and restores interrupted recordings on startup.
-- **Google Drive Resumable Streaming Upload:** Streams multi-gigabyte recordings directly to Google Drive with verification before deleting local files.
+- **Google Drive Resumable Streaming Upload:** Streams multi-gigabyte recordings directly to Google Drive.
+- **YouTube Data API v3 Auto-Upload:** Automatically uploads recorded live streams to YouTube as unlisted/private/public videos with customizable title templates, descriptions, and tags.
+- **Safe Dual Deletion:** Local files are deleted **only** after both Google Drive and YouTube (if enabled) have verified successful uploads.
 - **Disk Protection:** Checks available disk space before and during recordings (`MIN_FREE_DISK_GB=20`).
 - **Single Instance Enforcement:** SQLite process lock prevents duplicate recorders from running simultaneously.
 - **Graceful Shutdown:** Handles `SIGINT` and `SIGTERM` cleanly, finalizing active FFmpeg sessions.
@@ -103,17 +107,19 @@ This recorder solves this by:
                          │ (SQLite Database)        │
                          └────────────┬─────────────┘
                                       │
+                       ┌──────────────┴──────────────┐
+                       ▼                             ▼
+          ┌──────────────────────────┐  ┌──────────────────────────┐
+          │  Google Drive Uploader   │  │     YouTube Uploader     │
+          │    (Resumable Stream)    │  │    (Resumable Stream)    │
+          └────────────┬─────────────┘  └────────────┬─────────────┘
+                       │                             │
+                 Drive verified               YouTube verified
+                       └──────────────┬──────────────┘
+                                      │ (both verified)
                                       ▼
                          ┌──────────────────────────┐
-                         │ Google Drive Uploader    │
-                         │ (Resumable Stream)       │
-                         └────────────┬─────────────┘
-                                      │
-                               upload verified
-                                      │
-                                      ▼
-                         ┌──────────────────────────┐
-                         │ Delete Local Recording   │
+                         │  Delete Local Recording  │
                          └──────────────────────────┘
 ```
 
@@ -125,7 +131,7 @@ This recorder solves this by:
 - **Node.js:** v18.15.0 LTS or higher (Node 20+ or 24+ recommended).
 - **FFmpeg & FFprobe:** v4.4 or higher (v6+ / v7+ recommended with HLS demuxer support).
 - **Disk Space:** Sufficient free space for live stream buffers (recommended >= 50 GB).
-- **Google Account:** With Google Drive API enabled and OAuth 2.0 Desktop credentials.
+- **Google Account:** With Google Drive API and YouTube Data API v3 enabled.
 
 ---
 
@@ -160,22 +166,27 @@ ffprobe -version
 
 ---
 
-## 7. Google Cloud Console Setup
+## 7. Google Cloud Console Setup (Drive + YouTube)
+
+Both Google Drive and YouTube share the same Google Cloud project and `client_secret.json`:
 
 1. Open [Google Cloud Console](https://console.cloud.google.com/).
-2. Create a new project (e.g., `jkt48-recorder`).
-3. Navigate to **APIs & Services** > **Library**.
-4. Search for **Google Drive API** and click **Enable**.
-5. Navigate to **OAuth consent screen**:
+2. Create or select your project (e.g., `jkt48-recorder`).
+3. Navigate to **APIs & Services** > **Library**:
+   - Search for **Google Drive API** and click **Enable**.
+   - Search for **YouTube Data API v3** and click **Enable**.
+4. Navigate to **OAuth consent screen**:
    - Choose **External** (or Internal for Workspace).
    - Fill in the App Name and user support email.
-   - Under **Scopes**, add `https://www.googleapis.com/auth/drive.file`.
-   - Add your Google account under **Test users**.
-6. Navigate to **Credentials** > **Create Credentials** > **OAuth client ID**:
+   - Under **Scopes**, add:
+     - `https://www.googleapis.com/auth/drive.file`
+     - `https://www.googleapis.com/auth/youtube.upload`
+   - Add your Google account email under **Test users**.
+5. Navigate to **Credentials** > **Create Credentials** > **OAuth client ID**:
    - Application type: **Desktop app**.
    - Name: `JKT48 Stream Recorder`.
    - Click **Create**.
-7. Download the credentials JSON and save it as:
+6. Download the credentials JSON and save it as:
    ```text
    credentials/client_secret.json
    ```
@@ -196,7 +207,31 @@ npm run test:drive
 
 ---
 
-## 9. Environment Variables
+## 9. YouTube OAuth & Channel Setup
+
+Run the YouTube authorization CLI tool:
+```bash
+npm run test:youtube
+```
+
+1. If `credentials/youtube_token.json` does not exist, the script prints the YouTube authorization URL.
+2. Open the URL in your browser, select your Google / YouTube channel account, grant upload permissions, and copy the authorization code.
+3. Paste the authorization code back into the terminal prompt.
+4. The tool saves `credentials/youtube_token.json` and verifies access by fetching and displaying your channel title, custom URL, and subscriber count.
+5. In your `.env` file, set:
+   ```env
+   YOUTUBE_UPLOAD_ENABLED=true
+   ```
+
+> [!TIP]
+> **YouTube Quota & Privacy:**
+> - YouTube Data API provides a default free quota of **10,000 units/day**.
+> - Each video upload costs **1,600 units**, allowing up to 6 uploads per day (more than enough for daily JKT48 streams).
+> - Keep `YOUTUBE_PRIVACY_STATUS=unlisted` so videos are uploaded securely without immediately broadcasting to public feeds.
+
+---
+
+## 10. Environment Variables
 
 Create a `.env` file based on `.env.example`:
 
@@ -209,7 +244,7 @@ Create a `.env` file based on `.env.example`:
 | `RECORDINGS_DIR` | `./recordings` | Directory where recorded MP4 files are stored. |
 | `DATA_DIR` | `./data` | Directory for SQLite database. |
 | `LOG_DIR` | `./logs` | Directory for application logs. |
-| `CREDENTIALS_DIR` | `./credentials` | Directory for `client_secret.json` and `token.json`. |
+| `CREDENTIALS_DIR` | `./credentials` | Directory for `client_secret.json`, `token.json`, and `youtube_token.json`. |
 | `TIMEZONE` | `Asia/Jakarta` | Timezone for filename timestamps and directories. |
 | `FFMPEG_PATH` | `ffmpeg` | Path to FFmpeg executable. |
 | `FFPROBE_PATH` | `ffprobe` | Path to FFprobe executable. |
@@ -219,13 +254,20 @@ Create a `.env` file based on `.env.example`:
 | `GOOGLE_UPLOAD_RETRY_INITIAL_MS` | `10000` | Initial exponential backoff delay (10s). |
 | `GOOGLE_UPLOAD_RETRY_MAX_MS` | `600000` | Max backoff delay (10 minutes). |
 | `GOOGLE_UPLOAD_MAX_RETRIES` | `0` | Max upload retries (0 = unlimited). |
+| `YOUTUBE_UPLOAD_ENABLED` | `false` | Enable automatic uploads to YouTube (`true` or `false`). |
+| `YOUTUBE_PRIVACY_STATUS` | `unlisted` | Privacy status (`unlisted`, `private`, or `public`). |
+| `YOUTUBE_TITLE_TEMPLATE` | `JKT48 Live Stream - {date}` | Dynamic video title template. |
+| `YOUTUBE_DESCRIPTION_TEMPLATE` | `Recorded automatically...` | Dynamic video description template. |
+| `YOUTUBE_CATEGORY_ID` | `24` | YouTube Category ID (`24` = Entertainment, `10` = Music). |
+| `YOUTUBE_DEFAULT_TAGS` | `JKT48,Live,Stream...` | Comma-separated video tags. |
+| `YOUTUBE_MADE_FOR_KIDS` | `false` | YouTube COPPA declaration. |
 | `SHUTDOWN_TIMEOUT_MS` | `30000` | Max wait time during graceful shutdown. |
 | `LOG_LEVEL` | `info` | Pino log level (`trace`, `debug`, `info`, `warn`, `error`). |
 | `DRY_RUN` | `false` | When `true`, tests playlist parsing without recording. |
 
 ---
 
-## 10. First Run & Quick Start
+## 11. First Run & Quick Start
 
 1. Install dependencies:
    ```bash
@@ -239,14 +281,23 @@ Create a `.env` file based on `.env.example`:
    ```bash
    npm run test:stream
    ```
-4. Start the service:
+4. Authenticate Drive and/or YouTube:
+   ```bash
+   npm run test:drive
+   npm run test:youtube
+   ```
+5. Check recorder status:
+   ```bash
+   npm run status
+   ```
+6. Start the recorder service 24/7:
    ```bash
    npm start
    ```
 
 ---
 
-## 11. Stream Testing
+## 12. Stream Testing
 
 Use `npm run test:stream` to probe the stream without starting a recording:
 
@@ -279,7 +330,7 @@ URI: https://your-worker-domain.workers.dev/live/...
 
 ---
 
-## 12. Google Drive Testing
+## 13. Google Drive Testing
 
 Verify Drive credentials, folder permissions, and end-to-end upload/verification:
 
@@ -289,7 +340,17 @@ npm run test:drive
 
 ---
 
-## 13. Recording Behavior & Atomic Files
+## 14. YouTube Testing
+
+Verify YouTube credentials, channel permissions, and upload readiness:
+
+```bash
+npm run test:youtube
+```
+
+---
+
+## 15. Recording Behavior & Atomic Files
 
 - **File Naming:** Files are named using the recording start time formatted in the configured timezone (`Asia/Jakarta`):
   `YYYY-MM-DD_HH-mm-ss.mp4` (e.g., `2026-09-27_21-14-26.mp4`).
@@ -304,7 +365,7 @@ npm run test:drive
 
 ---
 
-## 14. Highest-Resolution Variant Selection
+## 16. Highest-Resolution Variant Selection
 
 Variant selection follows strict ordering:
 1. **Resolution (Height & Width):** Highest pixel height descending (e.g., 1080p > 720p > 480p).
@@ -314,17 +375,17 @@ Variant selection follows strict ordering:
 
 ---
 
-## 15. Persistent Upload Queue
+## 17. Persistent Upload Queue (Dual Platform)
 
 Uploads run independently from the recording engine in a persistent background worker:
-- SQLite persists recording status (`RECORDING`, `FINALIZING`, `PENDING_UPLOAD`, `UPLOADING`, `UPLOADED`, `UPLOAD_FAILED`, `INVALID`).
-- Even if Google Drive is temporarily offline, stream recordings continue uninterrupted and queue locally.
-- Large files stream using `fs.createReadStream()` and Google Drive resumable upload.
-- Local files are deleted **only** after Google Drive returns a valid file ID and metadata is verified.
+- SQLite persists separate recording statuses (`status` for Drive, `youtube_status` for YouTube).
+- Even if Google Drive or YouTube is temporarily offline or quota-limited, recordings continue uninterrupted and queue locally.
+- Large files stream using `fs.createReadStream()` and Google / YouTube resumable upload.
+- Local files are deleted **only** after both destinations have returned valid IDs and verified metadata.
 
 ---
 
-## 16. Retry & Backoff Behavior
+## 18. Retry & Backoff Behavior
 
 Failed uploads enter an exponential backoff schedule:
 $$\text{delay} = \min(\text{INITIAL\_MS} \times 2^{\text{attempts}}, \text{MAX\_MS})$$
@@ -333,20 +394,20 @@ By default:
 - Attempt 2: 20 seconds
 - Attempt 3: 40 seconds
 - Max backoff: 10 minutes (`600000ms`)
-- Max retries: 0 (unlimited retries until Drive recovers)
+- Max retries: 0 (unlimited retries until destination recovers)
 
 ---
 
-## 17. Crash Recovery
+## 19. Crash Recovery
 
 On application startup, `recoverStartupState()` automatically inspects SQLite:
-- Stale `UPLOADING` records are re-queued to `PENDING_UPLOAD` if the local file exists.
+- Stale `UPLOADING` records in Drive or YouTube are re-queued to `PENDING_UPLOAD` if the local file exists.
 - Crashed `RECORDING` sessions with existing `.partial.mp4` files are validated and finalized into `PENDING_UPLOAD`.
 - Missing or 0-byte files are flagged as `INVALID` with reasons recorded.
 
 ---
 
-## 18. Disk Space Protection
+## 20. Disk Space Protection
 
 Before starting any recording and periodically during polling:
 - `fs.statfsSync()` inspects available free gigabytes on the target filesystem.
@@ -355,7 +416,7 @@ Before starting any recording and periodically during polling:
 
 ---
 
-## 19. Linux & systemd Deployment
+## 21. Linux & systemd Deployment
 
 ### Step 1: Create dedicated user & copy files
 ```bash
@@ -400,7 +461,7 @@ sudo systemctl status jkt48-recorder
 
 ---
 
-## 20. Windows Deployment & Service
+## 22. Windows Deployment & Service
 
 To run as a background service on Windows:
 1. Use **PM2** or **NSSM (Non-Sucking Service Manager)**:
@@ -414,13 +475,16 @@ To run as a background service on Windows:
 
 ---
 
-## 21. Troubleshooting & FAQs
+## 23. Troubleshooting & FAQs
 
 ### Q: Why did FFmpeg fail with "is not in allowed_segment_extensions"?
 Some CDNs deliver live HLS segments ending in non-standard extensions like `.css` or `.js`. This application automatically passes `-allowed_extensions ALL -allowed_segment_extensions ALL -extension_picky 0 -f hls` to FFmpeg to bypass this limitation.
 
-### Q: Does Google Drive upload block active recording?
-No. Recording and uploading run asynchronously. A 2-hour stream recording can continue while previous recordings are uploading.
+### Q: Does uploading to Drive or YouTube block active recording?
+No. Recording and uploading run asynchronously. A multi-hour stream recording can continue while previous recordings are uploading.
+
+### Q: What happens if YouTube quota is exceeded?
+The worker detects quota exhaustion (`quotaExceeded`), keeps the local video safely, and marks status as `UPLOAD_FAILED`. It retries on the next day when quota resets.
 
 ### Q: Where are the logs?
 Logs are written in JSON Lines format to `logs/app.log` and formatted to stdout in development mode.
@@ -433,14 +497,14 @@ npm run status
 
 ---
 
-## 22. Security Best Practices
+## 24. Security Best Practices
 
-- `client_secret.json`, `token.json`, and `.env` are listed in `.gitignore` and must never be committed to source control.
+- `client_secret.json`, `token.json`, `youtube_token.json`, and `.env` are listed in `.gitignore` and must never be committed to source control.
 - Pino logger includes redaction filters for OAuth tokens and authorization headers.
 - FFmpeg is executed using Node.js `spawn()` with an argument array to prevent shell injection vulnerabilities.
 
 ---
 
-## 23. Usage & Legal Note
+## 25. Usage & Legal Note
 
 This software is designed solely for archival and personal backup purposes. Ensure you have the right to record and store any stream content in accordance with applicable terms of service and local laws.

@@ -60,11 +60,26 @@ function loadConfig() {
     MIN_RECORDING_SIZE_BYTES: parseInt(process.env.MIN_RECORDING_SIZE_BYTES, 10) || 1048576,
     MIN_FREE_DISK_GB: parseFloat(process.env.MIN_FREE_DISK_GB) || 20,
 
+    // Google Drive Upload Settings
     GOOGLE_DRIVE_FOLDER_ID: process.env.GOOGLE_DRIVE_FOLDER_ID || '',
 
     GOOGLE_UPLOAD_RETRY_INITIAL_MS: parseInt(process.env.GOOGLE_UPLOAD_RETRY_INITIAL_MS, 10) || 10000,
     GOOGLE_UPLOAD_RETRY_MAX_MS: parseInt(process.env.GOOGLE_UPLOAD_RETRY_MAX_MS, 10) || 600000,
     GOOGLE_UPLOAD_MAX_RETRIES: parseInt(process.env.GOOGLE_UPLOAD_MAX_RETRIES, 10) || 0,
+
+    // YouTube Upload Settings
+    YOUTUBE_UPLOAD_ENABLED: process.env.YOUTUBE_UPLOAD_ENABLED === 'true',
+    YOUTUBE_PRIVACY_STATUS: process.env.YOUTUBE_PRIVACY_STATUS || 'unlisted',
+    YOUTUBE_TITLE_TEMPLATE: process.env.YOUTUBE_TITLE_TEMPLATE || 'JKT48 Live Stream - {date}',
+    YOUTUBE_DESCRIPTION_TEMPLATE:
+      process.env.YOUTUBE_DESCRIPTION_TEMPLATE ||
+      'Recorded automatically by JKT48 Stream Auto-Recorder\nDate: {date}\nResolution: {resolution}',
+    YOUTUBE_CATEGORY_ID: process.env.YOUTUBE_CATEGORY_ID || '24',
+    YOUTUBE_DEFAULT_TAGS: (process.env.YOUTUBE_DEFAULT_TAGS || 'JKT48,Live,Stream,Theater,Showroom,IDN')
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean),
+    YOUTUBE_MADE_FOR_KIDS: process.env.YOUTUBE_MADE_FOR_KIDS === 'true',
 
     SHUTDOWN_TIMEOUT_MS: parseInt(process.env.SHUTDOWN_TIMEOUT_MS, 10) || 30000,
 

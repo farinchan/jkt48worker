@@ -55,7 +55,8 @@ class StreamRecorder {
       bandwidth: variant.bandwidth,
       frame_rate: variant.frameRate,
       source_url: variant.uri,
-      status: 'RECORDING'
+      status: 'RECORDING',
+      youtube_status: this.config.YOUTUBE_UPLOAD_ENABLED ? 'PENDING_UPLOAD' : 'SKIPPED'
     });
 
     this.logger.info(
@@ -153,6 +154,7 @@ class StreamRecorder {
       this.logger.warn({ recordId, err, stderr: stderr.slice(-500) }, 'Invalid recording');
       this.db.updateRecording(recordId, {
         status: 'INVALID',
+        youtube_status: 'INVALID',
         ended_at: now,
         file_size: stats ? stats.size : 0,
         last_upload_error: err
@@ -178,6 +180,7 @@ class StreamRecorder {
 
     const updated = this.db.updateRecording(recordId, {
       status: 'PENDING_UPLOAD',
+      youtube_status: this.config.YOUTUBE_UPLOAD_ENABLED ? 'PENDING_UPLOAD' : 'SKIPPED',
       file_size: finalStats.size,
       duration_seconds: durationSeconds,
       ended_at: now

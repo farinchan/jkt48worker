@@ -5,6 +5,7 @@ const { AppDatabase } = require('./db/database');
 const { StreamMonitor } = require('./stream/monitor');
 const { StreamRecorder } = require('./recording/recorder');
 const { GoogleDriveService } = require('./upload/googleDrive');
+const { YouTubeService } = require('./upload/youtube');
 const { UploadWorker } = require('./upload/uploadWorker');
 const { GracefulShutdownManager } = require('./system/shutdown');
 
@@ -44,19 +45,26 @@ async function main() {
     logger.info({ recoveredCount: recovered.length, recovered }, 'Crash recovery completed');
   }
 
-  // 4. Initialize Google Drive & Upload Worker
+  // 4. Initialize Google Drive & YouTube Services
   const driveService = new GoogleDriveService({ config, logger });
   await driveService.initialize();
 
+  const youtubeService = new YouTubeService({ config, logger });
+  if (config.YOUTUBE_UPLOAD_ENABLED) {
+    await youtubeService.initialize();
+  }
+
+  // 5. Initialize Upload Worker (coordinates Drive + YouTube uploads)
   const uploadWorker = new UploadWorker({
     config,
     db,
     driveService,
+    youtubeService,
     logger
   });
   uploadWorker.start();
 
-  // 5. Initialize Stream Recorder
+  // 6. Initialize Stream Recorder
   const recorder = new StreamRecorder({ config, db, logger });
 
   // 6. Initialize Stream Monitor

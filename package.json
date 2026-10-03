@@ -9,6 +9,7 @@
     "test": "node --test tests/**/*.test.js",
     "test:stream": "node src/cli/test-stream.js",
     "test:drive": "node src/cli/test-drive.js",
+    "test:youtube": "node src/cli/test-youtube.js",
     "status": "node src/cli/status.js"
   },
   "keywords": [

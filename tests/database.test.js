@@ -28,16 +28,19 @@ test('AppDatabase initializes schema and migrations correctly', () => {
     assert.ok(rec.id);
     assert.equal(rec.filename, '2026-09-27_20-00-00.mp4');
     assert.equal(rec.status, 'RECORDING');
+    assert.equal(rec.youtube_status, 'SKIPPED');
     assert.equal(rec.width, 1920);
 
     // Update
     const updated = db.updateRecording(rec.id, {
       status: 'PENDING_UPLOAD',
+      youtube_status: 'PENDING_UPLOAD',
       file_size: 5000000,
       duration_seconds: 120
     });
 
     assert.equal(updated.status, 'PENDING_UPLOAD');
+    assert.equal(updated.youtube_status, 'PENDING_UPLOAD');
     assert.equal(updated.file_size, 5000000);
     assert.equal(updated.duration_seconds, 120);
 

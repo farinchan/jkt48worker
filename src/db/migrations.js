@@ -41,6 +41,20 @@ const migrations = [
         );
       `);
     }
+  },
+  {
+    version: 2,
+    name: 'add_youtube_upload_columns',
+    up: (db) => {
+      db.exec(`
+        ALTER TABLE recordings ADD COLUMN youtube_video_id TEXT;
+        ALTER TABLE recordings ADD COLUMN youtube_status TEXT NOT NULL DEFAULT 'SKIPPED';
+        ALTER TABLE recordings ADD COLUMN youtube_upload_attempts INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE recordings ADD COLUMN youtube_last_error TEXT;
+
+        CREATE INDEX IF NOT EXISTS idx_recordings_youtube_status ON recordings(youtube_status);
+      `);
+    }
   }
 ];
 
