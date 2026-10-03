@@ -104,6 +104,16 @@ class YouTubeService {
 
     try {
       const token = JSON.parse(fs.readFileSync(tokenPathToUse, 'utf8'));
+
+      if (token.scope && !token.scope.includes('youtube')) {
+        this.logger.warn(
+          { tokenPath: tokenPathToUse },
+          'Token does not have YouTube upload scope (https://www.googleapis.com/auth/youtube.upload). Run "npm run test:youtube" to authenticate.'
+        );
+        this.isReady = false;
+        return false;
+      }
+
       this.oauth2Client.setCredentials(token);
       this.youtube = google.youtube({ version: 'v3', auth: this.oauth2Client });
       this.isReady = true;

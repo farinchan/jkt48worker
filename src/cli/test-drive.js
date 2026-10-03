@@ -42,9 +42,11 @@ async function testDrive() {
   // Attempt initial load
   await driveService.initialize();
 
-  // If token.json is missing, initiate auth flow
+  // If drive_token.json is missing or lacks drive scope, initiate auth flow
   if (!driveService.isReady) {
-    console.log('\ntoken.json not found. Initiating OAuth 2.0 authentication flow...\n');
+    console.log(
+      '\nGoogle Drive token not found or lacks Google Drive scope.\nInitiating OAuth 2.0 authentication flow for Google Drive...\n'
+    );
     const authUrl = driveService.generateAuthUrl();
     console.log('Authorize this application by visiting this URL in your browser:');
     console.log('--------------------------------------------------');
@@ -59,7 +61,7 @@ async function testDrive() {
 
     try {
       await driveService.exchangeCodeForToken(code);
-      console.log(`\nTokens saved to: ${tokenPath}`);
+      console.log(`\nTokens saved to: ${driveService.getDriveTokenPath()}`);
     } catch (err) {
       console.error(`Authentication error: ${err.message}`);
       process.exit(1);

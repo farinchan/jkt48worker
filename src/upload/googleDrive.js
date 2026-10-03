@@ -17,8 +17,28 @@ class GoogleDriveService {
     return path.join(this.config.CREDENTIALS_DIR, 'client_secret.json');
   }
 
-  getTokenPath() {
+  getDriveTokenPath() {
+    return path.join(this.config.CREDENTIALS_DIR, 'drive_token.json');
+  }
+
+  getGeneralTokenPath() {
     return path.join(this.config.CREDENTIALS_DIR, 'token.json');
+  }
+
+  getTokenPath() {
+    const drivePath = this.getDriveTokenPath();
+    if (fs.existsSync(drivePath)) return drivePath;
+
+    const genPath = this.getGeneralTokenPath();
+    if (fs.existsSync(genPath)) {
+      try {
+        const t = JSON.parse(fs.readFileSync(genPath, 'utf8'));
+        if (t.scope && t.scope.includes('drive')) return genPath;
+      } catch {
+        // ignore
+      }
+    }
+    return drivePath;
   }
 
   /**
@@ -26,7 +46,8 @@ class GoogleDriveService {
    */
   async initialize() {
     const secretPath = this.getClientSecretPath();
-    const tokenPath = this.getTokenPath();
+    const driveTokenPath = this.getDriveTokenPath();
+    const genTokenPath = this.getGeneralTokenPath();
 
     if (!fs.existsSync(secretPath)) {
       this.logger.warn(
@@ -61,39 +82,59 @@ class GoogleDriveService {
       redirect_uris ? redirect_uris[0] : 'http://localhost'
     );
 
+    // Determine which token file to use
+    let tokenPathToUse = null;
+    if (fs.existsSync(driveTokenPath)) {
+      tokenPathToUse = driveTokenPath;
+    } else if (fs.existsSync(genTokenPath)) {
+      tokenPathToUse = genTokenPath;
+    }
+
     // Save refreshed tokens automatically
     this.oauth2Client.on('tokens', (tokens) => {
       try {
+        const savePath = tokenPathToUse || driveTokenPath;
         let existing = {};
-        if (fs.existsSync(tokenPath)) {
-          existing = JSON.parse(fs.readFileSync(tokenPath, 'utf8'));
+        if (fs.existsSync(savePath)) {
+          existing = JSON.parse(fs.readFileSync(savePath, 'utf8'));
         }
         const merged = { ...existing, ...tokens };
-        fs.writeFileSync(tokenPath, JSON.stringify(merged, null, 2));
-        this.logger.debug('Refreshed and persisted Google Drive OAuth tokens');
+        fs.writeFileSync(savePath, JSON.stringify(merged, null, 2));
+        this.logger.debug({ savePath }, 'Refreshed and persisted Google Drive OAuth tokens');
       } catch (e) {
-        this.logger.error({ err: e }, 'Failed to write updated tokens to token.json');
+        this.logger.error({ err: e }, 'Failed to write updated tokens to Drive token file');
       }
     });
 
-    if (!fs.existsSync(tokenPath)) {
+    if (!tokenPathToUse) {
       this.logger.warn(
-        { tokenPath },
-        'Google Drive token.json not found. Run "npm run test:drive" to authenticate.'
+        { driveTokenPath },
+        'Google Drive token not found. Run "npm run test:drive" to authenticate.'
       );
       this.isReady = false;
       return false;
     }
 
     try {
-      const token = JSON.parse(fs.readFileSync(tokenPath, 'utf8'));
+      const token = JSON.parse(fs.readFileSync(tokenPathToUse, 'utf8'));
+
+      // Verify the token actually has Google Drive scope
+      if (token.scope && !token.scope.includes('drive')) {
+        this.logger.warn(
+          { tokenPath: tokenPathToUse },
+          'Token does not have Google Drive scope (https://www.googleapis.com/auth/drive.file). Run "npm run test:drive" to authenticate.'
+        );
+        this.isReady = false;
+        return false;
+      }
+
       this.oauth2Client.setCredentials(token);
       this.drive = google.drive({ version: 'v3', auth: this.oauth2Client });
       this.isReady = true;
-      this.logger.info('Google Drive service initialized successfully');
+      this.logger.info({ tokenFile: path.basename(tokenPathToUse) }, 'Google Drive service initialized successfully');
       return true;
     } catch (err) {
-      this.logger.error({ err }, 'Failed to load token.json');
+      this.logger.error({ err }, 'Failed to load Drive token file');
       this.isReady = false;
       return false;
     }
@@ -122,7 +163,7 @@ class GoogleDriveService {
     }
     const { tokens } = await this.oauth2Client.getToken(code);
     this.oauth2Client.setCredentials(tokens);
-    const tokenPath = this.getTokenPath();
+    const tokenPath = this.getDriveTokenPath();
     fs.writeFileSync(tokenPath, JSON.stringify(tokens, null, 2));
     this.drive = google.drive({ version: 'v3', auth: this.oauth2Client });
     this.isReady = true;
