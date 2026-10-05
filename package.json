@@ -23,7 +23,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "better-sqlite3": "^13.0.3",
+    "better-sqlite3": "^12.11.1",
     "dotenv": "^18.0.4",
     "googleapis": "^182.0.0",
     "pino": "^10.3.1",

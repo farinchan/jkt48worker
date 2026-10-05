@@ -13,7 +13,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev \
+    && npm rebuild better-sqlite3 --build-from-source \
+    && node -e "require('better-sqlite3')(':memory:')"
 
 # ==========================================
 # Stage 2: Production Runtime
@@ -40,6 +42,9 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY package*.json ./
 COPY src/ ./src/
 
+# Verify native module loads cleanly in runtime environment
+RUN node -e "require('better-sqlite3')(':memory:')"
+
 # Ensure runtime mount directories exist
 RUN mkdir -p /app/recordings /app/data /app/logs /app/credentials
 
@@ -52,7 +57,7 @@ ENV NODE_ENV=production \
     LOG_DIR=/app/logs \
     CREDENTIALS_DIR=/app/credentials
 
-# Use tini as PID 1 to properly forward SIGTERM/SIGINT to Node and FFmpeg child processes
-ENTRYPOINT ["/usr/bin/tini", "--"]
+# Use tini with -s (subreaper) to handle signal forwarding and process reaping cleanly
+ENTRYPOINT ["/usr/bin/tini", "-s", "--"]
 
 CMD ["node", "src/index.js"]
