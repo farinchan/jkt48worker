@@ -245,7 +245,7 @@ Create a `.env` file based on `.env.example`:
 | `RECORDINGS_DIR` | `./recordings` | Directory where recorded MP4 files are stored. |
 | `DATA_DIR` | `./data` | Directory for SQLite database. |
 | `LOG_DIR` | `./logs` | Directory for application logs. |
-| `CREDENTIALS_DIR` | `./credentials` | Directory for `client_secret.json`, `token.json`, and `youtube_token.json`. |
+| `CREDENTIALS_DIR` | `./credentials` | Directory for `client_secret.json`, `drive_token.json`, and `youtube_token.json`. |
 | `TIMEZONE` | `Asia/Jakarta` | Timezone for filename timestamps and directories. |
 | `FFMPEG_PATH` | `ffmpeg` | Path to FFmpeg executable. |
 | `FFPROBE_PATH` | `ffprobe` | Path to FFprobe executable. |
