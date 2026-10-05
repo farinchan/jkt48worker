@@ -518,6 +518,8 @@ The project includes an optimized `Dockerfile` and `docker-compose.yml` equipped
 5. **View Live Application Logs:**
    ```bash
    docker compose logs -f recorder
+   # or directly via container name:
+   docker logs -f worker-stream-recorder
    ```
 
 6. **Check Recorder Status:**

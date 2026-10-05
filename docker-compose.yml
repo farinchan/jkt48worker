@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: jkt48-stream-recorder
+    container_name: worker-stream-recorder
     restart: unless-stopped
     init: true
     stop_grace_period: 35s
