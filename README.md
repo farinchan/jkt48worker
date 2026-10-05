@@ -28,9 +28,10 @@ Production-ready, unattended 24/7 Node.js application that monitors the live JKT
 20. [Disk Space Protection](#20-disk-space-protection)
 21. [Linux & systemd Deployment](#21-linux--systemd-deployment)
 22. [Windows Deployment & Service](#22-windows-deployment--service)
-23. [Troubleshooting & FAQs](#23-troubleshooting--faqs)
-24. [Security Best Practices](#24-security-best-practices)
-25. [Usage & Legal Note](#25-usage--legal-note)
+23. [Docker & Docker Compose Deployment](#23-docker--docker-compose-deployment)
+24. [Troubleshooting & FAQs](#24-troubleshooting--faqs)
+25. [Security Best Practices](#25-security-best-practices)
+26. [Usage & Legal Note](#26-usage--legal-note)
 
 ---
 
@@ -475,7 +476,69 @@ To run as a background service on Windows:
 
 ---
 
-## 23. Troubleshooting & FAQs
+## 23. Docker & Docker Compose Deployment
+
+The project includes an optimized `Dockerfile` and `docker-compose.yml` equipped with:
+- **Debian Bookworm & Node.js 20 LTS**
+- **FFmpeg, tzdata, ca-certificates**
+- **`tini` init system:** Properly handles PID 1 signal forwarding (`SIGTERM`/`SIGINT`) to FFmpeg and Node.js without leaving zombie processes.
+- **`stop_grace_period: 35s`:** Gives the recorder up to 35 seconds to cleanly finalize and remux any active stream recording before container shutdown.
+- **Persistent Bind Mounts:** Persists all recordings, SQLite database, logs, and OAuth tokens on the host filesystem.
+
+### Quick Start with Docker Compose
+
+1. **Configure Environment:**
+   Ensure `.env` exists in the project root:
+   ```bash
+   cp .env.example .env
+   # Edit .env as needed
+   ```
+
+2. **Place OAuth Credentials:**
+   Put your `client_secret.json` into the `credentials/` folder:
+   ```text
+   credentials/client_secret.json
+   ```
+
+3. **Authenticate Google Drive & YouTube (Interactive):**
+   Run the CLI tools inside temporary containers to perform the one-time browser OAuth flow:
+   ```bash
+   # Authenticate Google Drive
+   docker compose run --rm recorder npm run test:drive
+
+   # Authenticate YouTube (if enabled)
+   docker compose run --rm recorder npm run test:youtube
+   ```
+
+4. **Start the Recorder in the Background:**
+   ```bash
+   docker compose up -d --build
+   ```
+
+5. **View Live Application Logs:**
+   ```bash
+   docker compose logs -f recorder
+   ```
+
+6. **Check Recorder Status:**
+   ```bash
+   docker compose run --rm recorder npm run status
+   ```
+
+7. **Test Stream Reachability inside Docker:**
+   ```bash
+   docker compose run --rm recorder npm run test:stream
+   ```
+
+8. **Stop Gracefully:**
+   ```bash
+   docker compose down
+   ```
+   *(Docker will send `SIGTERM` and allow up to 35 seconds for active recordings to cleanly close and save).*
+
+---
+
+## 24. Troubleshooting & FAQs
 
 ### Q: Why did FFmpeg fail with "is not in allowed_segment_extensions"?
 Some CDNs deliver live HLS segments ending in non-standard extensions like `.css` or `.js`. This application automatically passes `-allowed_extensions ALL -allowed_segment_extensions ALL -extension_picky 0 -f hls` to FFmpeg to bypass this limitation.
