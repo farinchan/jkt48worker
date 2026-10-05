@@ -1,6 +1,27 @@
+# ==========================================
+# Stage 1: Build Dependencies
+# ==========================================
+FROM node:20-bookworm-slim AS builder
+
+WORKDIR /app
+
+# Install build tools in case native C++ compilation is required (e.g. better-sqlite3 on aarch64)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+# ==========================================
+# Stage 2: Production Runtime
+# ==========================================
 FROM node:20-bookworm-slim
 
-# Install system dependencies: FFmpeg, tzdata, ca-certificates, and tini
+# Install runtime dependencies: FFmpeg, tzdata, ca-certificates, and tini
+# All are natively available on linux/amd64 and linux/arm64 (aarch64)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     tzdata \
@@ -14,13 +35,9 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 WORKDIR /app
 
-# Copy dependency manifests first for layer caching
+# Copy production node_modules from builder stage
+COPY --from=builder /app/node_modules ./node_modules
 COPY package*.json ./
-
-# Install production dependencies cleanly
-RUN npm ci --omit=dev
-
-# Copy application source code
 COPY src/ ./src/
 
 # Ensure runtime mount directories exist
