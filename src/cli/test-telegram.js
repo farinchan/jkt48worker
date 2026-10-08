@@ -1,6 +1,7 @@
 const { config } = require('../config');
 const { logger } = require('../logger');
 const { TelegramNotifier } = require('../notifier/telegram');
+const { getDiskSpace } = require('../system/diskSpace');
 
 async function testTelegram() {
   console.log('Testing Telegram Bot Integration');
@@ -18,20 +19,47 @@ async function testTelegram() {
     process.exit(1);
   }
 
-  // If enabled is false in env, force enable for test run
+  // Force enable for test run
   const testConfig = { ...config, TELEGRAM_BOT_ENABLED: true };
   const notifier = new TelegramNotifier({ config: testConfig, logger });
 
-  console.log('\nSending test message to Telegram...');
-  const testMessage = `🤖 <b>JKT48 Stream Auto-Recorder Test</b>\n\n` +
-    `Hello! Telegram notifications are configured and functioning properly.\n\n` +
-    `• <b>Time:</b> ${new Date().toISOString()}\n` +
-    `• <b>Node Environment:</b> ${config.NODE_ENV}`;
+  const disk = getDiskSpace(config.RECORDINGS_DIR);
+  const args = process.argv.slice(2);
 
-  const result = await notifier.sendMessage(testMessage);
+  let result;
+  if (args.includes('--status')) {
+    console.log('\nSending Worker Status Report notification to Telegram...');
+    result = await notifier.notifyStatusReport({
+      isRecording: false,
+      activeFile: null,
+      queueCount: 0,
+      freeDiskGb: disk.freeGb,
+      uptimeSeconds: Math.floor(process.uptime())
+    });
+  } else if (args.includes('--online')) {
+    console.log('\nSending Worker Online notification to Telegram...');
+    result = await notifier.notifyWorkerStarted({
+      nodeEnv: config.NODE_ENV,
+      pid: process.pid,
+      port: config.WEB_ENABLED ? config.WEB_PORT : null,
+      driveEnabled: Boolean(config.GOOGLE_DRIVE_FOLDER_ID),
+      youtubeEnabled: Boolean(config.YOUTUBE_UPLOAD_ENABLED),
+      freeDiskGb: disk.freeGb,
+      streamUrl: config.STREAM_URL
+    });
+  } else {
+    console.log('\nSending Test notification to Telegram...');
+    result = await notifier.sendMessage(
+      `🤖 <b>JKT48 Stream Auto-Recorder Test</b>\n\n` +
+      `Hello! Telegram notifications are configured and functioning properly.\n\n` +
+      `• <b>Time:</b> ${new Date().toISOString()}\n` +
+      `• <b>Node Environment:</b> ${config.NODE_ENV}\n` +
+      `• <b>Free Disk:</b> ${disk.freeGb !== null ? `${disk.freeGb} GB` : '-'}`
+    );
+  }
 
   if (result.success) {
-    console.log(`\nSuccess! Test message delivered to Telegram (Message ID: ${result.messageId}).`);
+    console.log(`\nSuccess! Message delivered to Telegram (Message ID: ${result.messageId}).`);
   } else {
     console.error(`\nFailed to send Telegram message: ${result.error}`);
     process.exit(1);

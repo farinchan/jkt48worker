@@ -61,6 +61,12 @@ async function main() {
   const telegramNotifier = new TelegramNotifier({ config, logger });
   if (telegramNotifier.isConfigured()) {
     logger.info('Telegram bot notifications enabled');
+    if (recovered.length > 0) {
+      await telegramNotifier.notifyCrashRecovery({
+        recoveredCount: recovered.length,
+        items: recovered
+      });
+    }
   }
 
   // 6. Initialize Upload Worker (coordinates Drive + YouTube uploads)
@@ -131,17 +137,28 @@ async function main() {
       session.sessionPromise
         .then(async (finalizeResult) => {
           if (finalizeResult && finalizeResult.success) {
+            const rec = finalizeResult.recording;
             await telegramNotifier.notifyRecordingFinished({
-              filename: finalizeResult.filename,
-              durationSeconds: finalizeResult.durationSeconds,
-              fileSize: finalizeResult.fileSize,
-              status: finalizeResult.status
+              filename: rec ? rec.filename : session.filename,
+              durationSeconds: rec ? rec.duration_seconds : null,
+              fileSize: rec ? rec.file_size : null,
+              status: rec ? rec.status : 'PENDING_UPLOAD'
             });
             uploadWorker.triggerNow();
+          } else if (finalizeResult && !finalizeResult.success) {
+            await telegramNotifier.notifyRecordingFailed({
+              filename: session.filename,
+              reason: finalizeResult.reason,
+              exitCode: finalizeResult.exitCode
+            });
           }
         })
-        .catch((sessionErr) => {
+        .catch(async (sessionErr) => {
           logger.error({ err: sessionErr.message }, 'Recording session encountered an error');
+          await telegramNotifier.notifyRecordingFailed({
+            filename: session.filename,
+            reason: sessionErr.message
+          });
         });
     } catch (err) {
       if (err.message && err.message.includes('Insufficient disk space')) {
@@ -149,6 +166,11 @@ async function main() {
         await telegramNotifier.notifyLowDiskSpace({
           freeGb: disk.freeGb,
           minFreeGb: config.MIN_FREE_DISK_GB
+        });
+      } else {
+        await telegramNotifier.notifyRecordingFailed({
+          filename: 'session-start',
+          reason: err.message
         });
       }
       logger.error({ err: err.message }, 'Failed to start recording');
@@ -174,7 +196,7 @@ async function main() {
     await webServer.start();
   }
 
-  // 8. Register Graceful Shutdown Handlers
+  // 10. Register Graceful Shutdown Handlers
   const shutdownManager = new GracefulShutdownManager({
     config,
     db,
@@ -182,15 +204,58 @@ async function main() {
     recorder,
     uploadWorker,
     webServer,
+    telegramNotifier,
     logger
   });
   shutdownManager.registerSignals();
 
-  // 9. Start Monitoring
+  // 11. Start Monitoring
   monitor.start();
+
+  // 12. Send Worker Online Notification
+  const disk = getDiskSpace(config.RECORDINGS_DIR);
+  await telegramNotifier.notifyWorkerStarted({
+    nodeEnv: config.NODE_ENV,
+    pid: process.pid,
+    port: config.WEB_ENABLED ? config.WEB_PORT : null,
+    driveEnabled: Boolean(config.GOOGLE_DRIVE_FOLDER_ID),
+    youtubeEnabled: Boolean(config.YOUTUBE_UPLOAD_ENABLED),
+    freeDiskGb: disk.freeGb,
+    streamUrl: config.STREAM_URL
+  });
+
+  // 13. Optional Periodic Heartbeat
+  if (config.TELEGRAM_HEARTBEAT_INTERVAL_MINUTES > 0 && telegramNotifier.isConfigured()) {
+    const intervalMs = config.TELEGRAM_HEARTBEAT_INTERVAL_MINUTES * 60 * 1000;
+    const heartbeatTimer = setInterval(async () => {
+      try {
+        const curDisk = getDiskSpace(config.RECORDINGS_DIR);
+        await telegramNotifier.notifyStatusReport({
+          isRecording: recorder.isRecording(),
+          activeFile: recorder.currentSession ? recorder.currentSession.finalPath : null,
+          queueCount: db.countPendingUploads(),
+          freeDiskGb: curDisk.freeGb,
+          uptimeSeconds: Math.floor(process.uptime())
+        });
+      } catch (hbErr) {
+        logger.warn({ err: hbErr.message }, 'Failed to send periodic heartbeat to Telegram');
+      }
+    }, intervalMs);
+    heartbeatTimer.unref();
+  }
 }
 
-main().catch((err) => {
+main().catch(async (err) => {
   logger.fatal({ err: err.message, stack: err.stack }, 'Fatal application startup failure');
+  try {
+    const emergencyNotifier = new TelegramNotifier({ config, logger });
+    if (emergencyNotifier.isConfigured()) {
+      await emergencyNotifier.sendMessage(
+        `🚨 <b>JKT48 Worker Startup Fatal Error</b>\n\n<code>${err.message}</code>`
+      );
+    }
+  } catch {
+    // ignore
+  }
   process.exit(1);
 });

@@ -258,6 +258,33 @@ class WebServer {
         return;
       }
 
+      // Route: POST /actions/status-telegram
+      if (pathname === '/actions/status-telegram' && method === 'POST') {
+        if (!this.telegramNotifier || !this.telegramNotifier.isConfigured()) {
+          res.writeHead(302, { Location: '/?msg=telegram_not_configured' });
+          res.end();
+          return;
+        }
+        const status = this._getSystemStatus();
+        const activeFile = status.activeRecordings.length > 0 ? status.activeRecordings[0].filename : null;
+        const sendRes = await this.telegramNotifier.notifyStatusReport({
+          isRecording: status.isRecording,
+          activeFile,
+          queueCount: status.pendingUploads,
+          freeDiskGb: status.disk.freeGb,
+          uptimeSeconds: status.uptimeSeconds
+        });
+        if (sendRes.success) {
+          res.writeHead(302, { Location: '/?msg=telegram_status_sent' });
+        } else {
+          res.writeHead(302, {
+            Location: `/?msg=telegram_test_failed&err=${encodeURIComponent(sendRes.error || 'unknown')}`
+          });
+        }
+        res.end();
+        return;
+      }
+
       // Route: POST /recordings/:id/requeue
       const requeueMatch = pathname.match(/^\/recordings\/(\d+)\/requeue$/);
       if (requeueMatch && method === 'POST') {
@@ -398,6 +425,7 @@ class WebServer {
     else if (msg === 'marked_uploaded') flashMessage = `Recording #${msgId} marked as UPLOADED.`;
     else if (msg === 'deleted') flashMessage = `Recording #${msgId} deleted successfully.`;
     else if (msg === 'telegram_test_sent') flashMessage = 'Telegram test notification delivered successfully!';
+    else if (msg === 'telegram_status_sent') flashMessage = 'Telegram status report delivered successfully!';
     else if (msg === 'telegram_test_failed') flashMessage = `Failed to send Telegram notification: ${url.searchParams.get('err') || 'unknown error'}`;
     else if (msg === 'telegram_not_configured') flashMessage = 'Telegram bot is not configured or disabled in .env.';
 
@@ -480,6 +508,10 @@ class WebServer {
       ${status.telegramConfigured ? `&nbsp;
       <form method="POST" action="/actions/test-telegram" style="display:inline">
         <button type="submit" class="btn">Test Telegram Alert</button>
+      </form>
+      &nbsp;
+      <form method="POST" action="/actions/status-telegram" style="display:inline">
+        <button type="submit" class="btn">Send Status to Telegram</button>
       </form>` : ''}
       &nbsp;
       <a href="/" class="btn" style="text-decoration:none; display:inline-block; border:1px solid #777; background:#efefef; color:#000;">Refresh</a>

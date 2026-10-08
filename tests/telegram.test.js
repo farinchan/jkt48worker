@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { TelegramNotifier } = require('../src/notifier/telegram');
+const { TelegramNotifier, escapeTelegramHtml } = require('../src/notifier/telegram');
 
 test('TelegramNotifier checks configuration correctly', () => {
   const disabled = new TelegramNotifier({
@@ -22,6 +22,13 @@ test('TelegramNotifier checks configuration correctly', () => {
     config: { TELEGRAM_BOT_ENABLED: true, TELEGRAM_BOT_TOKEN: '123', TELEGRAM_CHAT_ID: '456' }
   });
   assert.equal(valid.isConfigured(), true);
+});
+
+test('TelegramNotifier escapes HTML special characters properly', () => {
+  assert.equal(escapeTelegramHtml('foo & bar <baz>'), 'foo &amp; bar &lt;baz&gt;');
+  assert.equal(escapeTelegramHtml(null), '');
+  assert.equal(escapeTelegramHtml(undefined), '');
+  assert.equal(escapeTelegramHtml(123), '123');
 });
 
 test('TelegramNotifier skips sendMessage when unconfigured without throwing', async () => {
@@ -64,6 +71,30 @@ test('TelegramNotifier sends notification via fetch when configured', async () =
     assert.equal(interceptedBody.text, '<b>Test alert</b>');
     assert.equal(interceptedBody.parse_mode, 'HTML');
 
+    // Test notifyWorkerStarted
+    await notifier.notifyWorkerStarted({
+      nodeEnv: 'production',
+      pid: 1234,
+      port: 60021,
+      driveEnabled: true,
+      youtubeEnabled: false,
+      freeDiskGb: 45.2,
+      streamUrl: 'https://example.com/stream.m3u8'
+    });
+    assert.ok(interceptedBody.text.includes('JKT48 Worker is Online'));
+    assert.ok(interceptedBody.text.includes('1234'));
+    assert.ok(interceptedBody.text.includes('Port 60021'));
+    assert.ok(interceptedBody.text.includes('45.2 GB'));
+
+    // Test notifyWorkerStopped
+    await notifier.notifyWorkerStopped({
+      reason: 'SIGTERM',
+      uptimeSeconds: 7200
+    });
+    assert.ok(interceptedBody.text.includes('JKT48 Worker Stopped'));
+    assert.ok(interceptedBody.text.includes('SIGTERM'));
+    assert.ok(interceptedBody.text.includes('2h'));
+
     // Test notifyStreamOnline
     await notifier.notifyStreamOnline({
       variant: { width: 1920, height: 1080, frameRate: 60, bandwidth: 8000000 },
@@ -81,6 +112,27 @@ test('TelegramNotifier sends notification via fetch when configured', async () =
     });
     assert.ok(interceptedBody.text.includes('1h 1m 1s'));
     assert.ok(interceptedBody.text.includes('100.0 MB'));
+
+    // Test notifyRecordingFailed
+    await notifier.notifyRecordingFailed({
+      filename: 'corrupted.mp4',
+      reason: 'FFmpeg exit code 1',
+      exitCode: 1
+    });
+    assert.ok(interceptedBody.text.includes('Recording Error'));
+    assert.ok(interceptedBody.text.includes('corrupted.mp4'));
+    assert.ok(interceptedBody.text.includes('FFmpeg exit code 1'));
+
+    // Test notifyCrashRecovery
+    await notifier.notifyCrashRecovery({
+      recoveredCount: 2,
+      items: [
+        { filename: 'session_1.mp4', status: 'PENDING_UPLOAD' },
+        { filename: 'session_2.mp4', status: 'INVALID' }
+      ]
+    });
+    assert.ok(interceptedBody.text.includes('Crash Recovery Executed'));
+    assert.ok(interceptedBody.text.includes('session_1.mp4'));
 
     // Test notifyDriveSuccess and notifyDriveFailure
     await notifier.notifyDriveSuccess({ filename: 'test.mp4', fileId: 'drive123' });
@@ -103,6 +155,18 @@ test('TelegramNotifier sends notification via fetch when configured', async () =
     // Test notifyLowDiskSpace
     await notifier.notifyLowDiskSpace({ freeGb: 4.5, minFreeGb: 20 });
     assert.ok(interceptedBody.text.includes('4.5 GB'));
+
+    // Test notifyStatusReport
+    await notifier.notifyStatusReport({
+      isRecording: true,
+      activeFile: 'live.mp4',
+      queueCount: 3,
+      freeDiskGb: 15.0,
+      uptimeSeconds: 3600
+    });
+    assert.ok(interceptedBody.text.includes('Status Report'));
+    assert.ok(interceptedBody.text.includes('live.mp4'));
+    assert.ok(interceptedBody.text.includes('3'));
   } finally {
     global.fetch = originalFetch;
   }

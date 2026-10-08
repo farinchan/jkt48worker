@@ -1,11 +1,12 @@
 class GracefulShutdownManager {
-  constructor({ config, db, monitor, recorder, uploadWorker, webServer, logger }) {
+  constructor({ config, db, monitor, recorder, uploadWorker, webServer, telegramNotifier, logger }) {
     this.config = config;
     this.db = db;
     this.monitor = monitor;
     this.recorder = recorder;
     this.uploadWorker = uploadWorker;
     this.webServer = webServer || null;
+    this.telegramNotifier = telegramNotifier || null;
     this.logger = logger;
     this.isShuttingDown = false;
   }
@@ -22,7 +23,7 @@ class GracefulShutdownManager {
     // Handle unexpected exceptions
     process.on('uncaughtException', (err) => {
       this.logger.fatal({ err }, 'Uncaught exception');
-      this.shutdown('uncaughtException', 1);
+      this.shutdown(`Uncaught exception: ${err.message}`, 1);
     });
 
     process.on('unhandledRejection', (reason) => {
@@ -35,6 +36,17 @@ class GracefulShutdownManager {
     this.isShuttingDown = true;
 
     this.logger.info({ reason }, 'Initiating graceful shutdown sequence');
+
+    if (this.telegramNotifier && this.telegramNotifier.isConfigured()) {
+      try {
+        await this.telegramNotifier.notifyWorkerStopped({
+          reason,
+          uptimeSeconds: Math.floor(process.uptime())
+        });
+      } catch (tgErr) {
+        this.logger.warn({ err: tgErr.message }, 'Failed to send worker stopped alert to Telegram');
+      }
+    }
 
     const forceTimer = setTimeout(() => {
       this.logger.error('Shutdown timed out; forcing exit');

@@ -99,7 +99,8 @@ function loadConfig() {
     // Telegram Bot Notification Settings
     TELEGRAM_BOT_ENABLED: process.env.TELEGRAM_BOT_ENABLED === 'true',
     TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || '',
-    TELEGRAM_CHAT_ID: process.env.TELEGRAM_CHAT_ID || ''
+    TELEGRAM_CHAT_ID: process.env.TELEGRAM_CHAT_ID || '',
+    TELEGRAM_HEARTBEAT_INTERVAL_MINUTES: parseInt(process.env.TELEGRAM_HEARTBEAT_INTERVAL_MINUTES, 10) || 0
   };
 
   // Ensure directories exist

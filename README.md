@@ -383,12 +383,17 @@ Receive real-time alerts directly in your Telegram chat or channel whenever a st
    *(Or click **Test Telegram Alert** in the Web Management Dashboard).*
 
 ### Events Notified:
+- 🚀 **Worker Online & Active:** Sent on startup showing host, PID, environment, web dashboard port, Google Drive & YouTube status, and available disk space.
+- 🛑 **Worker Stopped / Offline:** Sent on graceful shutdown or crash showing reason and uptime duration.
+- 🔄 **Crash Recovery:** Sent on startup if unfinished sessions from a previous run or reboot are recovered.
 - 🔴 **Stream Online & Recording Started:** Resolution, FPS, bandwidth, and filename.
 - ⏹ **Recording Finalized:** Total duration, video file size, and upload queue status.
+- ❌ **Recording Interrupted / Error:** Detailed error reasons if FFmpeg fails or file size is invalid.
 - ☁️ **Google Drive Upload:** Direct view link when uploaded, or failure reason and attempt count.
 - 📺 **YouTube Upload:** Direct video watch link when uploaded, or failure reason.
 - ✅ **Uploads Complete:** When both Drive and YouTube are verified and local file is pruned.
 - 🚨 **Low Disk Space:** Alert when free storage drops below `MIN_FREE_DISK_GB`.
+- 📊 **Status Report / Heartbeat:** Triggered on-demand from the Web Dashboard or periodically via `TELEGRAM_HEARTBEAT_INTERVAL_MINUTES`.
 
 ---
 
