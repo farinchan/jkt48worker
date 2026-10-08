@@ -1,11 +1,12 @@
 const fs = require('fs');
 
 class UploadWorker {
-  constructor({ config, db, driveService, youtubeService, logger }) {
+  constructor({ config, db, driveService, youtubeService, telegramNotifier, logger }) {
     this.config = config;
     this.db = db;
     this.driveService = driveService;
     this.youtubeService = youtubeService || null;
+    this.telegramNotifier = telegramNotifier || null;
     this.logger = logger;
     this.isProcessing = false;
     this.timer = null;
@@ -145,6 +146,12 @@ class UploadWorker {
             },
             'All uploads completed and verified; local file safely deleted'
           );
+
+          if (this.telegramNotifier) {
+            await this.telegramNotifier.notifyAllUploadsComplete({
+              filename: finalItem.filename
+            });
+          }
         }
       } catch (delErr) {
         this.logger.error(
@@ -202,6 +209,13 @@ class UploadWorker {
         { id: item.id, filename: item.filename, fileId: result.fileId },
         'Google Drive upload verified'
       );
+
+      if (this.telegramNotifier) {
+        await this.telegramNotifier.notifyDriveSuccess({
+          filename: item.filename,
+          fileId: result.fileId
+        });
+      }
     } catch (uploadErr) {
       const nextAttempt = (item.upload_attempts || 0) + 1;
       const backoffMs = this.calculateBackoff(nextAttempt);
@@ -222,6 +236,14 @@ class UploadWorker {
         upload_attempts: nextAttempt,
         last_upload_error: uploadErr.message
       });
+
+      if (this.telegramNotifier) {
+        await this.telegramNotifier.notifyDriveFailure({
+          filename: item.filename,
+          error: uploadErr.message,
+          attempt: nextAttempt
+        });
+      }
     }
   }
 
@@ -283,6 +305,14 @@ class UploadWorker {
         { id: item.id, videoId: result.videoId, url: result.url },
         'YouTube upload verified'
       );
+
+      if (this.telegramNotifier) {
+        await this.telegramNotifier.notifyYouTubeSuccess({
+          filename: item.filename,
+          videoId: result.videoId,
+          url: result.url
+        });
+      }
     } catch (ytErr) {
       const nextAttempt = (item.youtube_upload_attempts || 0) + 1;
       const backoffMs = this.calculateBackoff(nextAttempt);
@@ -303,6 +333,14 @@ class UploadWorker {
         youtube_upload_attempts: nextAttempt,
         youtube_last_error: ytErr.message
       });
+
+      if (this.telegramNotifier) {
+        await this.telegramNotifier.notifyYouTubeFailure({
+          filename: item.filename,
+          error: ytErr.message,
+          attempt: nextAttempt
+        });
+      }
     }
   }
 }

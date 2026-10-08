@@ -10,6 +10,7 @@
     "test:stream": "node src/cli/test-stream.js",
     "test:drive": "node src/cli/test-drive.js",
     "test:youtube": "node src/cli/test-youtube.js",
+    "test:telegram": "node src/cli/test-telegram.js",
     "status": "node src/cli/status.js"
   },
   "keywords": [

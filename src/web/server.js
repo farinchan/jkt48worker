@@ -31,12 +31,13 @@ function formatDuration(seconds) {
 }
 
 class WebServer {
-  constructor({ config, db, monitor, recorder, uploadWorker, logger }) {
+  constructor({ config, db, monitor, recorder, uploadWorker, telegramNotifier, logger }) {
     this.config = config;
     this.db = db;
     this.monitor = monitor;
     this.recorder = recorder;
     this.uploadWorker = uploadWorker;
+    this.telegramNotifier = telegramNotifier || null;
     this.logger = logger;
     this.server = null;
     this.sessions = new Map(); // token -> expiry
@@ -236,6 +237,27 @@ class WebServer {
         return;
       }
 
+      // Route: POST /actions/test-telegram
+      if (pathname === '/actions/test-telegram' && method === 'POST') {
+        if (!this.telegramNotifier || !this.telegramNotifier.isConfigured()) {
+          res.writeHead(302, { Location: '/?msg=telegram_not_configured' });
+          res.end();
+          return;
+        }
+        const testRes = await this.telegramNotifier.sendMessage(
+          '🤖 <b>JKT48 Stream Recorder Test Notification</b>\n\nNotification test from Web Management Dashboard succeeded!'
+        );
+        if (testRes.success) {
+          res.writeHead(302, { Location: '/?msg=telegram_test_sent' });
+        } else {
+          res.writeHead(302, {
+            Location: `/?msg=telegram_test_failed&err=${encodeURIComponent(testRes.error || 'unknown')}`
+          });
+        }
+        res.end();
+        return;
+      }
+
       // Route: POST /recordings/:id/requeue
       const requeueMatch = pathname.match(/^\/recordings\/(\d+)\/requeue$/);
       if (requeueMatch && method === 'POST') {
@@ -315,6 +337,8 @@ class WebServer {
       youtubeEnabled: this.config.YOUTUBE_UPLOAD_ENABLED,
       youtubePrivacy: this.config.YOUTUBE_PRIVACY_STATUS,
       driveFolderId: this.config.GOOGLE_DRIVE_FOLDER_ID ? 'Configured' : 'Root',
+      telegramConfigured: this.telegramNotifier ? this.telegramNotifier.isConfigured() : false,
+      telegramEnabled: Boolean(this.config.TELEGRAM_BOT_ENABLED),
       uptimeSeconds: Math.floor(process.uptime())
     };
   }
@@ -373,6 +397,9 @@ class WebServer {
     else if (msg === 'requeued') flashMessage = `Recording #${msgId} requeued for upload.`;
     else if (msg === 'marked_uploaded') flashMessage = `Recording #${msgId} marked as UPLOADED.`;
     else if (msg === 'deleted') flashMessage = `Recording #${msgId} deleted successfully.`;
+    else if (msg === 'telegram_test_sent') flashMessage = 'Telegram test notification delivered successfully!';
+    else if (msg === 'telegram_test_failed') flashMessage = `Failed to send Telegram notification: ${url.searchParams.get('err') || 'unknown error'}`;
+    else if (msg === 'telegram_not_configured') flashMessage = 'Telegram bot is not configured or disabled in .env.';
 
     const status = this._getSystemStatus();
     const totalCount = this.db ? this.db.countRecordings(statusFilter) : 0;
@@ -438,6 +465,7 @@ class WebServer {
       <tr><td><strong>Upload Queue:</strong></td><td>${status.pendingUploads} pending</td></tr>
       <tr><td><strong>Google Drive:</strong></td><td>${status.driveFolderId}</td></tr>
       <tr><td><strong>YouTube Upload:</strong></td><td>${status.youtubeEnabled ? `ENABLED (${status.youtubePrivacy})` : 'DISABLED'}</td></tr>
+      <tr><td><strong>Telegram Alerts:</strong></td><td>${status.telegramConfigured ? '<span style="color:green;font-weight:bold;">ENABLED (Configured)</span>' : (status.telegramEnabled ? '<span style="color:orange;font-weight:bold;">MISSING TOKEN/CHAT ID</span>' : '<span style="color:#888;">DISABLED</span>')}</td></tr>
       <tr><td><strong>Process Uptime:</strong></td><td>${uptimeH}h ${uptimeM}m</td></tr>
     </table>
 
@@ -449,6 +477,10 @@ class WebServer {
       <form method="POST" action="/actions/recover" style="display:inline">
         <button type="submit" class="btn">Recover / Check Stale Uploads</button>
       </form>
+      ${status.telegramConfigured ? `&nbsp;
+      <form method="POST" action="/actions/test-telegram" style="display:inline">
+        <button type="submit" class="btn">Test Telegram Alert</button>
+      </form>` : ''}
       &nbsp;
       <a href="/" class="btn" style="text-decoration:none; display:inline-block; border:1px solid #777; background:#efefef; color:#000;">Refresh</a>
     </div>

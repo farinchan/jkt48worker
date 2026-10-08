@@ -22,6 +22,9 @@ services:
       - WEB_ENABLED=${WEB_ENABLED:-true}
       - WEB_PORT=60021
       - WEB_PASSWORD=${WEB_PASSWORD:-admin}
+      - TELEGRAM_BOT_ENABLED=${TELEGRAM_BOT_ENABLED:-false}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
     volumes:
       - ./recordings:/app/recordings
       - ./data:/app/data

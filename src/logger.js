@@ -43,7 +43,9 @@ function createLogger(config = {}) {
           'password',
           'authorization',
           'headers.authorization',
-          'headers.cookie'
+          'headers.cookie',
+          'telegram_bot_token',
+          'TELEGRAM_BOT_TOKEN'
         ],
         censor: '[REDACTED]'
       }

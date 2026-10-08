@@ -94,7 +94,12 @@ function loadConfig() {
     WEB_ENABLED: process.env.WEB_ENABLED !== 'false',
     WEB_PORT: parseInt(process.env.WEB_PORT, 10) || 60021,
     WEB_HOST: process.env.WEB_HOST || '0.0.0.0',
-    WEB_PASSWORD: process.env.WEB_PASSWORD || 'admin'
+    WEB_PASSWORD: process.env.WEB_PASSWORD || 'admin',
+
+    // Telegram Bot Notification Settings
+    TELEGRAM_BOT_ENABLED: process.env.TELEGRAM_BOT_ENABLED === 'true',
+    TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || '',
+    TELEGRAM_CHAT_ID: process.env.TELEGRAM_CHAT_ID || ''
   };
 
   // Ensure directories exist

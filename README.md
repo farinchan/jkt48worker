@@ -20,19 +20,20 @@ Production-ready, unattended 24/7 Node.js application that monitors the live JKT
 12. [Stream Testing](#12-stream-testing)
 13. [Google Drive Testing](#13-google-drive-testing)
 14. [YouTube Testing](#14-youtube-testing)
-15. [Recording Behavior & Atomic Files](#15-recording-behavior--atomic-files)
-16. [Highest-Resolution Variant Selection](#16-highest-resolution-variant-selection)
-17. [Persistent Upload Queue (Dual Platform)](#17-persistent-upload-queue-dual-platform)
-18. [Retry & Backoff Behavior](#18-retry--backoff-behavior)
-19. [Crash Recovery](#19-crash-recovery)
-20. [Disk Space Protection](#20-disk-space-protection)
-21. [Linux & systemd Deployment](#21-linux--systemd-deployment)
-22. [Windows Deployment & Service](#22-windows-deployment--service)
-23. [Docker & Docker Compose Deployment](#23-docker--docker-compose-deployment)
-24. [Web Management Dashboard](#24-web-management-dashboard)
-25. [Troubleshooting & FAQs](#25-troubleshooting--faqs)
-26. [Security Best Practices](#26-security-best-practices)
-27. [Usage & Legal Note](#27-usage--legal-note)
+15. [Telegram Bot Setup & Testing](#15-telegram-bot-setup--testing)
+16. [Recording Behavior & Atomic Files](#16-recording-behavior--atomic-files)
+17. [Highest-Resolution Variant Selection](#17-highest-resolution-variant-selection)
+18. [Persistent Upload Queue (Dual Platform)](#18-persistent-upload-queue-dual-platform)
+19. [Retry & Backoff Behavior](#19-retry--backoff-behavior)
+20. [Crash Recovery](#20-crash-recovery)
+21. [Disk Space Protection](#21-disk-space-protection)
+22. [Linux & systemd Deployment](#22-linux--systemd-deployment)
+23. [Windows Deployment & Service](#23-windows-deployment--service)
+24. [Docker & Docker Compose Deployment](#24-docker--docker-compose-deployment)
+25. [Web Management Dashboard](#25-web-management-dashboard)
+26. [Troubleshooting & FAQs](#26-troubleshooting--faqs)
+27. [Security Best Practices](#27-security-best-practices)
+28. [Usage & Legal Note](#28-usage--legal-note)
 
 ---
 
@@ -269,6 +270,9 @@ Create a `.env` file based on `.env.example`:
 | `WEB_ENABLED` | `true` | Enable built-in web management dashboard (`true` or `false`). |
 | `WEB_PORT` | `60021` | HTTP port for web dashboard. |
 | `WEB_PASSWORD` | `admin` | Password for web dashboard authentication. |
+| `TELEGRAM_BOT_ENABLED` | `false` | Enable live notifications via Telegram Bot (`true` or `false`). |
+| `TELEGRAM_BOT_TOKEN` | `""` | Telegram Bot API token from `@BotFather`. |
+| `TELEGRAM_CHAT_ID` | `""` | Target Telegram Chat ID or Channel ID to receive alerts. |
 
 ---
 
@@ -355,7 +359,40 @@ npm run test:youtube
 
 ---
 
-## 15. Recording Behavior & Atomic Files
+## 15. Telegram Bot Setup & Testing
+
+Receive real-time alerts directly in your Telegram chat or channel whenever a stream starts, finishes, or uploads.
+
+### Setup Instructions:
+1. **Create a Bot with BotFather:**
+   - Open Telegram and message `@BotFather`.
+   - Send `/newbot`, follow prompts, and obtain your **HTTP API Token** (e.g. `123456789:ABCdefGHIjklMNOpqrSTUvwxYZ`).
+2. **Find Your Chat ID:**
+   - Message `@userinfobot` on Telegram to get your personal Chat ID.
+   - For a Telegram Channel or Group: add the bot as an administrator and use your channel/group ID (e.g. `-1001234567890`).
+3. **Configure in `.env`:**
+   ```env
+   TELEGRAM_BOT_ENABLED=true
+   TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrSTUvwxYZ
+   TELEGRAM_CHAT_ID=your_chat_id
+   ```
+4. **Test Delivery:**
+   ```bash
+   npm run test:telegram
+   ```
+   *(Or click **Test Telegram Alert** in the Web Management Dashboard).*
+
+### Events Notified:
+- 🔴 **Stream Online & Recording Started:** Resolution, FPS, bandwidth, and filename.
+- ⏹ **Recording Finalized:** Total duration, video file size, and upload queue status.
+- ☁️ **Google Drive Upload:** Direct view link when uploaded, or failure reason and attempt count.
+- 📺 **YouTube Upload:** Direct video watch link when uploaded, or failure reason.
+- ✅ **Uploads Complete:** When both Drive and YouTube are verified and local file is pruned.
+- 🚨 **Low Disk Space:** Alert when free storage drops below `MIN_FREE_DISK_GB`.
+
+---
+
+## 16. Recording Behavior & Atomic Files
 
 - **File Naming:** Files are named using the recording start time formatted in the configured timezone (`Asia/Jakarta`):
   `YYYY-MM-DD_HH-mm-ss.mp4` (e.g., `2026-09-27_21-14-26.mp4`).
@@ -370,7 +407,7 @@ npm run test:youtube
 
 ---
 
-## 16. Highest-Resolution Variant Selection
+## 17. Highest-Resolution Variant Selection
 
 Variant selection follows strict ordering:
 1. **Resolution (Height & Width):** Highest pixel height descending (e.g., 1080p > 720p > 480p).
@@ -380,7 +417,7 @@ Variant selection follows strict ordering:
 
 ---
 
-## 17. Persistent Upload Queue (Dual Platform)
+## 18. Persistent Upload Queue (Dual Platform)
 
 Uploads run independently from the recording engine in a persistent background worker:
 - SQLite persists separate recording statuses (`status` for Drive, `youtube_status` for YouTube).
@@ -390,7 +427,7 @@ Uploads run independently from the recording engine in a persistent background w
 
 ---
 
-## 18. Retry & Backoff Behavior
+## 19. Retry & Backoff Behavior
 
 Failed uploads enter an exponential backoff schedule:
 $$\text{delay} = \min(\text{INITIAL\_MS} \times 2^{\text{attempts}}, \text{MAX\_MS})$$
@@ -403,7 +440,7 @@ By default:
 
 ---
 
-## 19. Crash Recovery
+## 20. Crash Recovery
 
 On application startup, `recoverStartupState()` automatically inspects SQLite:
 - Stale `UPLOADING` records in Drive or YouTube are re-queued to `PENDING_UPLOAD` if the local file exists.
@@ -412,7 +449,7 @@ On application startup, `recoverStartupState()` automatically inspects SQLite:
 
 ---
 
-## 20. Disk Space Protection
+## 21. Disk Space Protection
 
 Before starting any recording and periodically during polling:
 - `fs.statfsSync()` inspects available free gigabytes on the target filesystem.
@@ -421,7 +458,7 @@ Before starting any recording and periodically during polling:
 
 ---
 
-## 21. Linux & systemd Deployment
+## 22. Linux & systemd Deployment
 
 ### Step 1: Create dedicated user & copy files
 ```bash
@@ -466,7 +503,7 @@ sudo systemctl status jkt48-recorder
 
 ---
 
-## 22. Windows Deployment & Service
+## 23. Windows Deployment & Service
 
 To run as a background service on Windows:
 1. Use **PM2** or **NSSM (Non-Sucking Service Manager)**:
@@ -480,7 +517,7 @@ To run as a background service on Windows:
 
 ---
 
-## 23. Docker & Docker Compose Deployment
+## 24. Docker & Docker Compose Deployment
 
 The project includes an optimized `Dockerfile` and `docker-compose.yml` equipped with:
 - **Debian Bookworm & Node.js 20 LTS**
@@ -544,7 +581,7 @@ The project includes an optimized `Dockerfile` and `docker-compose.yml` equipped
 
 ---
 
-## 24. Web Management Dashboard
+## 25. Web Management Dashboard
 
 The application includes a built-in, lightweight web management page with pure plain HTML (zero external frontend frameworks, minimal CPU/memory footprint, perfect for Raspberry Pi and headless servers).
 
@@ -557,6 +594,7 @@ The application includes a built-in, lightweight web management page with pure p
   - **Delete:** Delete recording metadata, with an option (`del file`) to also delete the local video file on disk.
   - **Trigger Upload Worker:** Force the upload worker to process pending items immediately.
   - **Recover / Sync State:** Check and recover stale or interrupted files on disk.
+  - **Test Telegram Alert:** Send an immediate test notification to your configured Telegram chat.
 - **Password Authentication:** Protected with a simple password configured directly in `.env`.
 
 ### Accessing the Dashboard:
@@ -575,7 +613,7 @@ The application includes a built-in, lightweight web management page with pure p
 
 ---
 
-## 25. Troubleshooting & FAQs
+## 26. Troubleshooting & FAQs
 
 ### Q: Why did FFmpeg fail with "is not in allowed_segment_extensions"?
 Some CDNs deliver live HLS segments ending in non-standard extensions like `.css` or `.js`. This application automatically passes `-allowed_extensions ALL -allowed_segment_extensions ALL -extension_picky 0 -f hls` to FFmpeg to bypass this limitation.
@@ -598,7 +636,7 @@ Or open the web management dashboard at `http://localhost:60021`.
 
 ---
 
-## 26. Security Best Practices
+## 27. Security Best Practices
 
 - `client_secret.json`, `drive_token.json`, `youtube_token.json`, and `.env` are listed in `.gitignore` and must never be committed to source control.
 - Pino logger includes redaction filters for OAuth tokens and authorization headers.
@@ -607,6 +645,6 @@ Or open the web management dashboard at `http://localhost:60021`.
 
 ---
 
-## 27. Usage & Legal Note
+## 28. Usage & Legal Note
 
 This software is designed solely for archival and personal backup purposes. Ensure you have the right to record and store any stream content in accordance with applicable terms of service and local laws.

@@ -8,7 +8,9 @@ const { GoogleDriveService } = require('./upload/googleDrive');
 const { YouTubeService } = require('./upload/youtube');
 const { UploadWorker } = require('./upload/uploadWorker');
 const { WebServer } = require('./web/server');
+const { TelegramNotifier } = require('./notifier/telegram');
 const { GracefulShutdownManager } = require('./system/shutdown');
+const { getDiskSpace } = require('./system/diskSpace');
 
 async function main() {
   logger.info({ nodeEnv: config.NODE_ENV, pid: process.pid }, 'Starting JKT48 Stream Auto-Recorder');
@@ -55,20 +57,27 @@ async function main() {
     await youtubeService.initialize();
   }
 
-  // 5. Initialize Upload Worker (coordinates Drive + YouTube uploads)
+  // 5. Initialize Telegram Notifier
+  const telegramNotifier = new TelegramNotifier({ config, logger });
+  if (telegramNotifier.isConfigured()) {
+    logger.info('Telegram bot notifications enabled');
+  }
+
+  // 6. Initialize Upload Worker (coordinates Drive + YouTube uploads)
   const uploadWorker = new UploadWorker({
     config,
     db,
     driveService,
     youtubeService,
+    telegramNotifier,
     logger
   });
   uploadWorker.start();
 
-  // 6. Initialize Stream Recorder
+  // 7. Initialize Stream Recorder
   const recorder = new StreamRecorder({ config, db, logger });
 
-  // 6. Initialize Stream Monitor
+  // 8. Initialize Stream Monitor
   const monitor = new StreamMonitor({ config, logger });
 
   monitor.on('online', async (event) => {
@@ -113,10 +122,21 @@ async function main() {
 
       const session = await recorder.startRecording(selectedVariant);
 
+      await telegramNotifier.notifyStreamOnline({
+        variant: selectedVariant,
+        filename: session.filename
+      });
+
       // Await session completion in background
       session.sessionPromise
-        .then((finalizeResult) => {
+        .then(async (finalizeResult) => {
           if (finalizeResult && finalizeResult.success) {
+            await telegramNotifier.notifyRecordingFinished({
+              filename: finalizeResult.filename,
+              durationSeconds: finalizeResult.durationSeconds,
+              fileSize: finalizeResult.fileSize,
+              status: finalizeResult.status
+            });
             uploadWorker.triggerNow();
           }
         })
@@ -124,6 +144,13 @@ async function main() {
           logger.error({ err: sessionErr.message }, 'Recording session encountered an error');
         });
     } catch (err) {
+      if (err.message && err.message.includes('Insufficient disk space')) {
+        const disk = getDiskSpace(config.RECORDINGS_DIR);
+        await telegramNotifier.notifyLowDiskSpace({
+          freeGb: disk.freeGb,
+          minFreeGb: config.MIN_FREE_DISK_GB
+        });
+      }
       logger.error({ err: err.message }, 'Failed to start recording');
     }
   });
@@ -132,7 +159,7 @@ async function main() {
     logger.info('Stream is currently offline. Monitoring continues...');
   });
 
-  // 7. Start Web Management Server (if enabled)
+  // 9. Start Web Management Server (if enabled)
   let webServer = null;
   if (config.WEB_ENABLED) {
     webServer = new WebServer({
@@ -141,6 +168,7 @@ async function main() {
       monitor,
       recorder,
       uploadWorker,
+      telegramNotifier,
       logger
     });
     await webServer.start();

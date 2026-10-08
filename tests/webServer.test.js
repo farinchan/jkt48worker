@@ -154,7 +154,16 @@ test('WebServer provides login, authentication, and dashboard management', async
     assert.ok(!fs.existsSync(sampleFile)); // file removed
     assert.equal(db.getRecordingById(rec.id), null);
 
-    // 10. POST /logout
+    // 10. POST /actions/test-telegram
+    const resTg = await fetch(`${baseUrl}/actions/test-telegram`, {
+      method: 'POST',
+      headers: { Cookie: sessionCookie },
+      redirect: 'manual'
+    });
+    assert.equal(resTg.status, 302);
+    assert.ok(resTg.headers.get('location').includes('msg='));
+
+    // 11. POST /logout
     const resLogout = await fetch(`${baseUrl}/logout`, {
       method: 'POST',
       headers: { Cookie: sessionCookie },
