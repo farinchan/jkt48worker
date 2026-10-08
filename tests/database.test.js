@@ -133,3 +133,57 @@ test('AppDatabase recovers interrupted recordings and stale uploads', () => {
     db.close();
   }
 });
+
+test('AppDatabase supports getAllRecordings, countRecordings, requeueRecording, and deleteRecording', () => {
+  const testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'jkt48-test-db-crud-'));
+  const dbPath = path.join(testDir, 'test.sqlite');
+  const db = new AppDatabase(dbPath);
+
+  try {
+    const file1 = path.join(testDir, 'test1.mp4');
+    fs.writeFileSync(file1, 'dummy-content');
+
+    const rec1 = db.createRecording({
+      filename: 'test1.mp4',
+      path: file1,
+      status: 'UPLOAD_FAILED',
+      youtube_status: 'UPLOAD_FAILED'
+    });
+
+    const rec2 = db.createRecording({
+      filename: 'test2.mp4',
+      path: path.join(testDir, 'test2.mp4'),
+      status: 'UPLOADED',
+      youtube_status: 'UPLOADED'
+    });
+
+    // Test countRecordings
+    assert.equal(db.countRecordings(), 2);
+    assert.equal(db.countRecordings('UPLOAD_FAILED'), 1);
+    assert.equal(db.countRecordings('UPLOADED'), 1);
+
+    // Test getAllRecordings with filter and pagination
+    const all = db.getAllRecordings({ limit: 10, offset: 0, status: 'ALL' });
+    assert.equal(all.length, 2);
+
+    const failed = db.getAllRecordings({ limit: 10, offset: 0, status: 'UPLOAD_FAILED' });
+    assert.equal(failed.length, 1);
+    assert.equal(failed[0].id, rec1.id);
+
+    // Test requeueRecording
+    const requeued = db.requeueRecording(rec1.id);
+    assert.equal(requeued.status, 'PENDING_UPLOAD');
+    assert.equal(requeued.youtube_status, 'PENDING_UPLOAD');
+    assert.equal(requeued.upload_attempts, 0);
+
+    // Test deleteRecording with file deletion
+    assert.ok(fs.existsSync(file1));
+    const deleted = db.deleteRecording(rec1.id, true);
+    assert.equal(deleted.id, rec1.id);
+    assert.ok(!fs.existsSync(file1)); // file removed
+    assert.equal(db.countRecordings(), 1);
+  } finally {
+    db.close();
+  }
+});
+

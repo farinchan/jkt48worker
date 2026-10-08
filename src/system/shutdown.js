@@ -1,10 +1,11 @@
 class GracefulShutdownManager {
-  constructor({ config, db, monitor, recorder, uploadWorker, logger }) {
+  constructor({ config, db, monitor, recorder, uploadWorker, webServer, logger }) {
     this.config = config;
     this.db = db;
     this.monitor = monitor;
     this.recorder = recorder;
     this.uploadWorker = uploadWorker;
+    this.webServer = webServer || null;
     this.logger = logger;
     this.isShuttingDown = false;
   }
@@ -52,7 +53,11 @@ class GracefulShutdownManager {
         await this.recorder.stopRecording();
       }
 
-      // 3. Stop upload worker
+      // 3. Stop upload worker and web server
+      if (this.webServer) {
+        await this.webServer.stop();
+      }
+
       if (this.uploadWorker) {
         this.uploadWorker.stop();
       }

@@ -8,6 +8,8 @@ services:
     stop_grace_period: 35s
     env_file:
       - .env
+    ports:
+      - "${WEB_PORT:-60021}:60021"
     environment:
       - NODE_ENV=production
       - TZ=Asia/Jakarta
@@ -17,6 +19,9 @@ services:
       - DATA_DIR=/app/data
       - LOG_DIR=/app/logs
       - CREDENTIALS_DIR=/app/credentials
+      - WEB_ENABLED=${WEB_ENABLED:-true}
+      - WEB_PORT=60021
+      - WEB_PASSWORD=${WEB_PASSWORD:-admin}
     volumes:
       - ./recordings:/app/recordings
       - ./data:/app/data

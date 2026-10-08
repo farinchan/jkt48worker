@@ -192,6 +192,76 @@ class AppDatabase {
       .all(limit);
   }
 
+  getAllRecordings({ limit = 50, offset = 0, status = null } = {}) {
+    if (status && status !== 'ALL') {
+      return this.db
+        .prepare(
+          'SELECT * FROM recordings WHERE status = ? OR youtube_status = ? ORDER BY id DESC LIMIT ? OFFSET ?'
+        )
+        .all(status, status, limit, offset);
+    }
+    return this.db
+      .prepare('SELECT * FROM recordings ORDER BY id DESC LIMIT ? OFFSET ?')
+      .all(limit, offset);
+  }
+
+  countRecordings(status = null) {
+    if (status && status !== 'ALL') {
+      const row = this.db
+        .prepare('SELECT COUNT(*) as count FROM recordings WHERE status = ? OR youtube_status = ?')
+        .get(status, status);
+      return row ? row.count : 0;
+    }
+    const row = this.db.prepare('SELECT COUNT(*) as count FROM recordings').get();
+    return row ? row.count : 0;
+  }
+
+  deleteRecording(id, deleteFile = false) {
+    const rec = this.getRecordingById(id);
+    if (!rec) return null;
+
+    if (deleteFile && rec.path) {
+      try {
+        if (fs.existsSync(rec.path)) {
+          fs.unlinkSync(rec.path);
+        }
+        const partialPath = rec.path.replace(/\.mp4$/, '.partial.mp4');
+        if (fs.existsSync(partialPath)) {
+          fs.unlinkSync(partialPath);
+        }
+      } catch (err) {
+        if (this.logger) {
+          this.logger.warn({ err: err.message, path: rec.path }, 'Failed to delete local file on recording deletion');
+        }
+      }
+    }
+
+    this.db.prepare('DELETE FROM recordings WHERE id = ?').run(id);
+    return rec;
+  }
+
+  requeueRecording(id) {
+    const rec = this.getRecordingById(id);
+    if (!rec) return null;
+
+    const updates = {
+      upload_attempts: 0,
+      last_upload_error: null
+    };
+
+    if (rec.status !== 'UPLOADED') {
+      updates.status = 'PENDING_UPLOAD';
+    }
+
+    if (rec.youtube_status !== 'UPLOADED' && rec.youtube_status !== 'DISABLED') {
+      updates.youtube_status = 'PENDING_UPLOAD';
+      updates.youtube_upload_attempts = 0;
+      updates.youtube_last_error = null;
+    }
+
+    return this.updateRecording(id, updates);
+  }
+
   /**
    * Recovers database state on startup (Section 35)
    */

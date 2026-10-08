@@ -29,9 +29,10 @@ Production-ready, unattended 24/7 Node.js application that monitors the live JKT
 21. [Linux & systemd Deployment](#21-linux--systemd-deployment)
 22. [Windows Deployment & Service](#22-windows-deployment--service)
 23. [Docker & Docker Compose Deployment](#23-docker--docker-compose-deployment)
-24. [Troubleshooting & FAQs](#24-troubleshooting--faqs)
-25. [Security Best Practices](#25-security-best-practices)
-26. [Usage & Legal Note](#26-usage--legal-note)
+24. [Web Management Dashboard](#24-web-management-dashboard)
+25. [Troubleshooting & FAQs](#25-troubleshooting--faqs)
+26. [Security Best Practices](#26-security-best-practices)
+27. [Usage & Legal Note](#27-usage--legal-note)
 
 ---
 
@@ -265,6 +266,9 @@ Create a `.env` file based on `.env.example`:
 | `SHUTDOWN_TIMEOUT_MS` | `30000` | Max wait time during graceful shutdown. |
 | `LOG_LEVEL` | `info` | Pino log level (`trace`, `debug`, `info`, `warn`, `error`). |
 | `DRY_RUN` | `false` | When `true`, tests playlist parsing without recording. |
+| `WEB_ENABLED` | `true` | Enable built-in web management dashboard (`true` or `false`). |
+| `WEB_PORT` | `60021` | HTTP port for web dashboard. |
+| `WEB_PASSWORD` | `admin` | Password for web dashboard authentication. |
 
 ---
 
@@ -540,7 +544,38 @@ The project includes an optimized `Dockerfile` and `docker-compose.yml` equipped
 
 ---
 
-## 24. Troubleshooting & FAQs
+## 24. Web Management Dashboard
+
+The application includes a built-in, lightweight web management page with pure plain HTML (zero external frontend frameworks, minimal CPU/memory footprint, perfect for Raspberry Pi and headless servers).
+
+### Features:
+- **System Overview:** Live stream status, active recording indicator, available disk space, pending upload count, and uptime.
+- **Recordings Management:** View all recordings with quick status filters (`All`, `Pending`, `Uploaded`, `Failed`, `Invalid`).
+- **Interactive Actions:**
+  - **Requeue Upload:** Reset failed or interrupted uploads back to `PENDING_UPLOAD`.
+  - **Mark Done:** Manually mark recordings as uploaded.
+  - **Delete:** Delete recording metadata, with an option (`del file`) to also delete the local video file on disk.
+  - **Trigger Upload Worker:** Force the upload worker to process pending items immediately.
+  - **Recover / Sync State:** Check and recover stale or interrupted files on disk.
+- **Password Authentication:** Protected with a simple password configured directly in `.env`.
+
+### Accessing the Dashboard:
+1. Ensure `.env` has:
+   ```env
+   WEB_ENABLED=true
+   WEB_PORT=60021
+   WEB_PASSWORD=admin
+   ```
+2. Open your browser:
+   ```text
+   http://localhost:60021
+   ```
+   *(Or `http://<raspberry-pi-ip>:60021` if running remotely).*
+3. Enter your configured password to access the management interface.
+
+---
+
+## 25. Troubleshooting & FAQs
 
 ### Q: Why did FFmpeg fail with "is not in allowed_segment_extensions"?
 Some CDNs deliver live HLS segments ending in non-standard extensions like `.css` or `.js`. This application automatically passes `-allowed_extensions ALL -allowed_segment_extensions ALL -extension_picky 0 -f hls` to FFmpeg to bypass this limitation.
@@ -559,17 +594,19 @@ Run:
 ```bash
 npm run status
 ```
+Or open the web management dashboard at `http://localhost:60021`.
 
 ---
 
-## 24. Security Best Practices
+## 26. Security Best Practices
 
-- `client_secret.json`, `token.json`, `youtube_token.json`, and `.env` are listed in `.gitignore` and must never be committed to source control.
+- `client_secret.json`, `drive_token.json`, `youtube_token.json`, and `.env` are listed in `.gitignore` and must never be committed to source control.
 - Pino logger includes redaction filters for OAuth tokens and authorization headers.
 - FFmpeg is executed using Node.js `spawn()` with an argument array to prevent shell injection vulnerabilities.
+- Web dashboard uses timing-safe password comparison and HTTP-only session cookies.
 
 ---
 
-## 25. Usage & Legal Note
+## 27. Usage & Legal Note
 
 This software is designed solely for archival and personal backup purposes. Ensure you have the right to record and store any stream content in accordance with applicable terms of service and local laws.

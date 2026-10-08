@@ -7,6 +7,7 @@ const { StreamRecorder } = require('./recording/recorder');
 const { GoogleDriveService } = require('./upload/googleDrive');
 const { YouTubeService } = require('./upload/youtube');
 const { UploadWorker } = require('./upload/uploadWorker');
+const { WebServer } = require('./web/server');
 const { GracefulShutdownManager } = require('./system/shutdown');
 
 async function main() {
@@ -131,18 +132,33 @@ async function main() {
     logger.info('Stream is currently offline. Monitoring continues...');
   });
 
-  // 7. Register Graceful Shutdown Handlers
+  // 7. Start Web Management Server (if enabled)
+  let webServer = null;
+  if (config.WEB_ENABLED) {
+    webServer = new WebServer({
+      config,
+      db,
+      monitor,
+      recorder,
+      uploadWorker,
+      logger
+    });
+    await webServer.start();
+  }
+
+  // 8. Register Graceful Shutdown Handlers
   const shutdownManager = new GracefulShutdownManager({
     config,
     db,
     monitor,
     recorder,
     uploadWorker,
+    webServer,
     logger
   });
   shutdownManager.registerSignals();
 
-  // 8. Start Monitoring
+  // 9. Start Monitoring
   monitor.start();
 }
 

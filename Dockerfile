@@ -55,7 +55,10 @@ ENV NODE_ENV=production \
     RECORDINGS_DIR=/app/recordings \
     DATA_DIR=/app/data \
     LOG_DIR=/app/logs \
-    CREDENTIALS_DIR=/app/credentials
+    CREDENTIALS_DIR=/app/credentials \
+    WEB_PORT=60021
+
+EXPOSE 60021
 
 # Use tini with -s (subreaper) to handle signal forwarding and process reaping cleanly
 ENTRYPOINT ["/usr/bin/tini", "-s", "--"]

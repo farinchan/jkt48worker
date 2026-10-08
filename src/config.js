@@ -88,7 +88,13 @@ function loadConfig() {
 
     LOG_LEVEL: process.env.LOG_LEVEL || 'info',
     DRY_RUN: process.env.DRY_RUN === 'true',
-    HTTP_USER_AGENT: process.env.HTTP_USER_AGENT || 'JKT48-Stream-Recorder/1.0'
+    HTTP_USER_AGENT: process.env.HTTP_USER_AGENT || 'JKT48-Stream-Recorder/1.0',
+
+    // Web Dashboard Management Settings
+    WEB_ENABLED: process.env.WEB_ENABLED !== 'false',
+    WEB_PORT: parseInt(process.env.WEB_PORT, 10) || 60021,
+    WEB_HOST: process.env.WEB_HOST || '0.0.0.0',
+    WEB_PASSWORD: process.env.WEB_PASSWORD || 'admin'
   };
 
   // Ensure directories exist
